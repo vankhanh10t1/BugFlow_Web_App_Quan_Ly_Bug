@@ -6,7 +6,7 @@ BugFlow is a full-stack bug tracking and issue management system for software te
 
 ## Current status
 
-Phase 1–2 foundation is complete: Next.js App Router, Tailwind CSS, shadcn/ui conventions, Prisma 7 schema/client, Neon-ready configuration, idempotent demo seed, core workflow rules, tests, and architecture documentation. Authentication and feature routes are intentionally scheduled for the next phases.
+Phase 1–2 is complete and verified against Neon: Next.js App Router, Tailwind CSS, shadcn/ui conventions, Prisma 7 schema/client, applied PostgreSQL migration, idempotent demo seed, core workflow rules, tests, and architecture documentation. Authentication and feature routes are intentionally scheduled for the next phases.
 
 ## Technology
 

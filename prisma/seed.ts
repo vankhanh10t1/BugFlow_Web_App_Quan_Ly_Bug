@@ -1,7 +1,9 @@
-import "dotenv/config";
+import { loadEnvConfig } from "@next/env";
 import { hash } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, SystemRole, ProjectRole, ProjectStatus, BugStatus, BugPriority, BugSeverity, ActivityType, NotificationType } from "../src/generated/prisma/client";
+
+loadEnvConfig(process.cwd());
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DIRECT_URL or DATABASE_URL is required to seed");
@@ -75,8 +77,14 @@ async function main() {
   }
 
   await prisma.comment.upsert({ where: { id: "seed-comment-1" }, update: {}, create: { id: "seed-comment-1", bugId: firstBugId, authorId: developer1Id, content: "I can reproduce this issue and am investigating it." } });
+  await prisma.comment.upsert({ where: { id: "seed-comment-2" }, update: {}, create: { id: "seed-comment-2", bugId: firstBugId, authorId: testerId, content: "Reproduction details have been confirmed on the latest build." } });
+  await prisma.comment.upsert({ where: { id: "seed-comment-3" }, update: {}, create: { id: "seed-comment-3", bugId: firstBugId, authorId: managerId, content: "Prioritized for the current sprint." } });
   await prisma.activityLog.upsert({ where: { id: "seed-activity-1" }, update: {}, create: { id: "seed-activity-1", projectId: projects[0].id, bugId: firstBugId, actorId: testerId, actionType: ActivityType.BUG_CREATED, description: "Created the demo bug" } });
+  await prisma.activityLog.upsert({ where: { id: "seed-activity-2" }, update: {}, create: { id: "seed-activity-2", projectId: projects[0].id, bugId: firstBugId, actorId: managerId, actionType: ActivityType.ASSIGNEE_CHANGED, fieldName: "assigneeId", newValue: developer1Id, description: "Assigned the demo bug" } });
+  await prisma.activityLog.upsert({ where: { id: "seed-activity-3" }, update: {}, create: { id: "seed-activity-3", projectId: projects[0].id, bugId: firstBugId, actorId: developer1Id, actionType: ActivityType.COMMENT_ADDED, description: "Added an investigation update" } });
   await prisma.notification.upsert({ where: { id: "seed-notification-1" }, update: {}, create: { id: "seed-notification-1", recipientId: developer1Id, actorId: managerId, bugId: firstBugId, type: NotificationType.BUG_ASSIGNED, title: "Bug assigned", message: "A demo bug was assigned to you." } });
+  await prisma.notification.upsert({ where: { id: "seed-notification-2" }, update: {}, create: { id: "seed-notification-2", recipientId: testerId, actorId: developer1Id, bugId: firstBugId, type: NotificationType.COMMENT_ADDED, title: "New comment", message: "A developer commented on a bug you reported." } });
+  await prisma.notification.upsert({ where: { id: "seed-notification-3" }, update: {}, create: { id: "seed-notification-3", recipientId: managerId, actorId: testerId, bugId: firstBugId, type: NotificationType.BUG_UPDATED, title: "Bug updated", message: "A demo bug was updated." } });
 }
 
 main().finally(async () => prisma.$disconnect());
