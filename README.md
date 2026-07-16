@@ -6,7 +6,7 @@ BugFlow is a full-stack bug tracking and issue management system for software te
 
 ## Current status
 
-Phase 1–3 is complete: the Neon-backed foundation now includes Auth.js credentials authentication, JWT sessions, registration, protected routes, server-side active-account checks, profile/password management, and role permission helpers. Project and bug feature routes are scheduled for the next phases.
+Phase 1–5 is complete: BugFlow now includes authentication, project management, and the bug core—transaction-safe readable bug codes, reporting/editing, server-side search/filter/sort/pagination, detail views, priority/severity controls, and transactional developer assignment with audit and notification records. Workflow transitions, comments and notification polling are scheduled for Phase 6.
 
 ## Technology
 
@@ -14,7 +14,8 @@ Phase 1–3 is complete: the Neon-backed foundation now includes Auth.js credent
 - Tailwind CSS 4, shadcn/ui conventions, Lucide React
 - Prisma 7 with `@prisma/adapter-pg`, Neon PostgreSQL
 - Zod, bcryptjs, Vitest
-- Planned: Auth.js, React Hook Form, TanStack Query, Recharts, DnD Kit, Cloudinary
+- Auth.js, React Hook Form, Zod, bcryptjs, Vitest
+- Planned: TanStack Query, Recharts, DnD Kit, Cloudinary
 
 ## Architecture
 
@@ -121,6 +122,17 @@ Prisma CLI reads `DIRECT_URL` through `prisma.config.ts`; runtime code uses pool
 ### Demo accounts
 
 `admin@bugflow.dev`, `manager@bugflow.dev`, `tester@bugflow.dev`, `developer1@bugflow.dev`, `developer2@bugflow.dev` — password: `Password@123`.
+
+These credentials are intentionally public demo-only values created by `npm run db:seed`; never reuse them for production data. To test the web flow, start the app, open `http://localhost:3000`, select **Đăng nhập**, and use for example:
+
+```text
+Email: tester@bugflow.dev
+Password: Password@123
+```
+
+Successful authentication redirects to `/dashboard`, where the header displays the current name and system role. Sign out from the header or the authenticated home-page navigation. Auth.js stores the encrypted JWT session in an HTTP-only cookie; the app does not store the token in `localStorage`. Protected pages use the Next.js 16 `proxy.ts` convention for an optimistic check, then query the active account again in the server DAL before accessing data.
+
+Public user documentation is available at `/docs`. The product UI intentionally links there instead of linking to the GitHub repository or exposing source code.
 
 ## Quality checks
 

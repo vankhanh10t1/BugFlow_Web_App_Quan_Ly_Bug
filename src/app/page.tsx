@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { ArrowRight, Bug, ChartNoAxesCombined, GitPullRequestArrow, ShieldCheck } from "lucide-react";
+import { ArrowRight, BookOpen, Bug, ChartNoAxesCombined, GitPullRequestArrow, LogIn, LogOut, ShieldCheck } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { getCurrentUser } from "@/lib/auth";
+import { logoutAction } from "@/features/auth/actions";
 
 const features = [
   { icon: GitPullRequestArrow, title: "Workflow có kiểm soát", text: "Mỗi chuyển trạng thái đều được xác thực và lưu dấu vết." },
@@ -9,7 +11,8 @@ const features = [
   { icon: ChartNoAxesCombined, title: "Thông tin để hành động", text: "Theo dõi tiến độ, lỗi quá hạn và tải công việc của đội ngũ." },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const user = await getCurrentUser();
   return (
     <main className="min-h-screen overflow-hidden bg-slate-50 text-slate-950">
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5" aria-label="Điều hướng chính">
@@ -17,7 +20,9 @@ export default function Home() {
           <span className="grid size-9 place-items-center rounded-xl bg-blue-600 text-white"><Bug className="size-5" /></span>
           BugFlow
         </Link>
-        <span className="rounded-full border bg-white px-3 py-1.5 text-xs font-medium text-slate-600">Foundation · Phase 1–2</span>
+        <div className="flex items-center gap-2">
+          {user ? <><Link href="/dashboard" className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">{user.fullName}</Link><form action={logoutAction}><button aria-label="Đăng xuất" className="grid size-9 place-items-center rounded-lg border bg-white text-slate-600 hover:text-slate-950"><LogOut className="size-4" /></button></form></> : <Link href="/login" className="flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"><LogIn className="size-4" />Đăng nhập</Link>}
+        </div>
       </nav>
 
       <section className="relative mx-auto grid max-w-6xl gap-14 px-6 pb-24 pt-16 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:pt-24">
@@ -33,7 +38,7 @@ export default function Home() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="#architecture" className={cn(buttonVariants({ size: "lg" }))}>Khám phá kiến trúc <ArrowRight className="size-4" /></Link>
-            <Link href="https://github.com" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>Tài liệu dự án</Link>
+            <Link href="/docs" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}><BookOpen className="size-4" />Tài liệu dự án</Link>
           </div>
         </div>
 

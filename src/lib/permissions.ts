@@ -5,7 +5,11 @@ export function hasSystemRole(current: SystemRole, allowed: readonly SystemRole[
 }
 
 export function canManageProject(systemRole: SystemRole, projectRole?: ProjectRole) {
-  return systemRole === "ADMIN" || systemRole === "PROJECT_MANAGER" || projectRole === "MANAGER";
+  return systemRole === "ADMIN" || projectRole === "MANAGER";
+}
+
+export function canCreateProject(systemRole: SystemRole) {
+  return systemRole === "ADMIN" || systemRole === "PROJECT_MANAGER";
 }
 
 export function canAccessProject(systemRole: SystemRole, projectRole?: ProjectRole) {
