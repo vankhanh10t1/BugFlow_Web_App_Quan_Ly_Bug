@@ -44,7 +44,7 @@ export default async function Home() {
 
         <div className="relative rounded-2xl border bg-white p-3 shadow-2xl shadow-slate-300/40">
           <div className="rounded-xl border bg-slate-950 p-5 text-white">
-            <div className="mb-8 flex items-center justify-between"><span className="text-sm font-medium">Sprint overview</span><span className="text-xs text-slate-400">SHOP · Active</span></div>
+            <div className="mb-8 flex items-center justify-between"><span className="text-sm font-medium">Tổng quan sprint</span><span className="text-xs text-slate-400">SHOP · Đang hoạt động</span></div>
             <div className="grid grid-cols-3 gap-3">
               {[['24','Open'],['7','In progress'],['82%','Resolved']].map(([value,label]) => <div key={label} className="rounded-lg bg-white/5 p-3"><p className="text-2xl font-semibold">{value}</p><p className="mt-1 text-xs text-slate-400">{label}</p></div>)}
             </div>

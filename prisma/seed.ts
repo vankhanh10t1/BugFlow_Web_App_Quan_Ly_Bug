@@ -1,13 +1,14 @@
 import { loadEnvConfig } from "@next/env";
 import { hash } from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { normalizePostgresUrl } from "../src/lib/database-url";
 import { PrismaClient, SystemRole, ProjectRole, ProjectStatus, BugStatus, BugPriority, BugSeverity, ActivityType, NotificationType } from "../src/generated/prisma/client";
 
 loadEnvConfig(process.cwd());
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DIRECT_URL or DATABASE_URL is required to seed");
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: normalizePostgresUrl(connectionString) }) });
 
 const demoUsers = [
   ["admin@bugflow.dev", "admin", "Admin User", SystemRole.ADMIN],

@@ -10,7 +10,7 @@ BugFlow là hệ thống theo dõi lỗi và quản lý issue dành cho nhóm ph
 
 ### Trạng thái hiện tại
 
-Phase 1–6 đã hoàn thành. Dự án hiện có:
+Phase 1–8 đã hoàn thành. Dự án hiện có:
 
 - Nền tảng Next.js và Neon PostgreSQL.
 - Authentication và authorization.
@@ -19,8 +19,10 @@ Phase 1–6 đã hoàn thành. Dự án hiện có:
 - Tạo, chỉnh sửa, tìm kiếm, lọc, sắp xếp và phân trang bug phía server.
 - Priority, severity và phân công developer kèm activity/notification.
 - Workflow chuyển trạng thái theo vai trò, comment có mention, activity timeline và notification polling mỗi 30 giây.
+- Dashboard tổng quan và dashboard theo project với aggregation, overview cards và biểu đồ Recharts.
+- Attachment Cloudinary có validation/phân quyền và Kanban DnD Kit có optimistic rollback.
 
-Phase 7 là bước tiếp theo: dashboard aggregation, overview cards, charts và project dashboard.
+Phạm vi MVP theo 8 phase đã hoàn thành; các mục E2E và vận hành production cần tiếp tục được xác minh trước khi phát hành thật.
 
 Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 
@@ -32,7 +34,7 @@ Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 - React Hook Form, Zod
 - Prisma 7, `@prisma/adapter-pg`, Neon PostgreSQL
 - Vitest
-- TanStack Query; dự kiến bổ sung Recharts, DnD Kit và Cloudinary
+- TanStack Query, Recharts, DnD Kit, Cloudinary
 
 ### Tính năng đã triển khai
 
@@ -46,15 +48,16 @@ Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 - Sinh bug code an toàn bằng atomic database counter.
 - Assign, reassign, unassign và developer self-assignment.
 - Activity log và notification record cho các thao tác quan trọng.
+- Workflow theo vai trò, comments, mentions, activity timeline và notification polling.
+- Dashboard tổng quan; dashboard project với biểu đồ status, priority, severity, assignee và xu hướng 30 ngày.
+- Upload/xóa attachment ảnh, video, log, text và PDF trên Cloudinary với preview ảnh.
+- Kanban theo project, filter, drag-and-drop, workflow validation, optimistic update và rollback.
 - Chống IDOR bằng membership và permission checks phía server.
 
-### Tính năng sắp triển khai
+### Việc mở rộng sau MVP
 
-- Workflow transition đầy đủ theo vai trò.
-- Comments, mentions và activity timeline.
-- Notification polling với TanStack Query.
-- Dashboard, charts, attachments và Kanban.
 - Playwright E2E cho các luồng nghiệp vụ chính.
+- Rate limiting, realtime notification và observability production.
 
 ### Kiến trúc
 
@@ -246,27 +249,24 @@ npm run build
 npm run type-check
 ```
 
-Trạng thái xác minh gần nhất: 11 test files, 27 tests đạt; lint, type-check và production build đều đạt.
+Trạng thái xác minh gần nhất: 15 test files, 39 tests đạt; lint, type-check và production build đều đạt.
 
 ### Deploy lên Vercel
 
-1. Tạo Neon database và Cloudinary project khi attachment được triển khai.
+1. Tạo Neon database và Cloudinary project; lấy cloud name, API key và API secret.
 2. Thêm các biến từ `.env.example` vào Vercel; dùng pooled `DATABASE_URL` cho runtime.
 3. Chạy `npm run db:deploy` trong môi trường CI/release tin cậy với `DIRECT_URL`.
-4. Deploy Next.js và kiểm tra authentication cùng database read/write.
+4. Deploy Next.js và kiểm tra authentication, database read/write, upload/xóa Cloudinary và giới hạn request body.
 5. Không lưu upload trên filesystem của Vercel hoặc expose secret qua `NEXT_PUBLIC_*`.
 
 ### Roadmap
 
-1. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
-2. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
+Tám phase MVP đã hoàn thành. Bước tiếp theo là E2E production-like, observability, security hardening và release validation.
 
 ### Giới hạn hiện tại
 
-- Chưa có dashboard analytics hoặc charts.
-- Chưa có attachment upload/storage integration.
-- Chưa có Kanban và drag-and-drop.
 - Chưa có Playwright E2E cho workflow hoàn chỉnh.
+- Upload Cloudinary thực tế cần credential hợp lệ và chưa được kiểm tra trong môi trường production của người dùng.
 
 ### Screenshots
 
@@ -284,7 +284,7 @@ BugFlow is a bug tracking and issue management system for software development t
 
 ### Current status
 
-Phases 1–6 are complete. The project currently includes:
+Phases 1–8 are complete. The project currently includes:
 
 - A Next.js and Neon PostgreSQL foundation.
 - Authentication and authorization.
@@ -293,8 +293,10 @@ Phases 1–6 are complete. The project currently includes:
 - Server-side bug creation, editing, search, filtering, sorting, and pagination.
 - Priority, severity, and developer assignment with activity and notification records.
 - Role-aware status transitions, comments with mentions, an activity timeline, and notification polling every 30 seconds.
+- Global and per-project dashboards with aggregations, overview cards, and Recharts visualizations.
+- Validated Cloudinary attachments and a DnD Kit Kanban board with optimistic rollback.
 
-Phase 7 is next: dashboard aggregations, overview cards, charts, and a project dashboard.
+The eight-phase MVP scope is complete; production-like E2E and operational validation remain before a real release.
 
 See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 
@@ -306,7 +308,7 @@ See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 - React Hook Form, Zod
 - Prisma 7, `@prisma/adapter-pg`, Neon PostgreSQL
 - Vitest
-- TanStack Query; Recharts, DnD Kit, and Cloudinary are planned
+- TanStack Query, Recharts, DnD Kit, Cloudinary
 
 ### Implemented features
 
@@ -320,15 +322,16 @@ See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 - Concurrency-safe bug codes using an atomic database counter.
 - Assignment, reassignment, unassignment, and developer self-assignment.
 - Activity and notification records for critical operations.
+- Role-aware workflows, comments, mentions, an activity timeline, and notification polling.
+- Global overview and project dashboards with status, priority, severity, assignee, and 30-day trend charts.
+- Cloudinary upload/deletion for images, videos, logs, text, and PDF files with image previews.
+- Project Kanban filtering, drag-and-drop, server workflow validation, optimistic updates, and rollback.
 - IDOR protection through server-side membership and permission checks.
 
-### Planned features
+### Post-MVP extensions
 
-- Complete role-aware workflow transitions.
-- Comments, mentions, and activity timeline.
-- Notification polling with TanStack Query.
-- Dashboards, charts, attachments, and Kanban.
 - Playwright E2E tests for critical business flows.
+- Rate limiting, realtime notifications, and production observability.
 
 ### Architecture
 
@@ -520,27 +523,24 @@ npm run build
 npm run type-check
 ```
 
-Latest verified state: 11 test files, 27 passing tests; lint, type-check, and production build all pass.
+Latest verified state: 15 test files, 39 passing tests; lint, type-check, and production build all pass.
 
 ### Deploy to Vercel
 
-1. Create a Neon database and a Cloudinary project when attachments are implemented.
+1. Create Neon and Cloudinary projects; obtain the cloud name, API key, and API secret.
 2. Add variables from `.env.example` to Vercel; use the pooled `DATABASE_URL` at runtime.
 3. Run `npm run db:deploy` in a trusted CI/release environment with `DIRECT_URL`.
-4. Deploy Next.js and verify authentication and database read/write operations.
+4. Deploy Next.js and verify authentication, database read/write, Cloudinary upload/deletion, and request body limits.
 5. Never store uploads on Vercel's filesystem or expose secrets through `NEXT_PUBLIC_*`.
 
 ### Roadmap
 
-1. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
-2. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
+All eight MVP phases are complete. Next steps are production-like E2E, observability, security hardening, and release validation.
 
 ### Current limitations
 
-- No dashboard analytics or charts yet.
-- No attachment upload/storage integration yet.
-- No Kanban or drag-and-drop yet.
 - No Playwright E2E coverage for the complete workflow yet.
+- Live Cloudinary upload still requires valid credentials and production-environment verification.
 
 ### Screenshots
 

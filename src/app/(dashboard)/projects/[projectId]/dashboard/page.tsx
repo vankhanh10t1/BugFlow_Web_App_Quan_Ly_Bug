@@ -1,0 +1,8 @@
+import Link from "next/link";
+import { ArrowLeft, Bug, Clock3, RotateCcw } from "lucide-react";
+import { requirePageUser } from "@/lib/auth";
+import { getProjectDashboard } from "@/features/dashboard/service";
+import { OverviewCard } from "@/components/dashboard/overview-card";
+import { ProjectCharts } from "@/components/dashboard/project-charts";
+
+export default async function ProjectDashboardPage({ params }: { params: Promise<{ projectId: string }> }) { const actor = await requirePageUser(); const { projectId } = await params; const data = await getProjectDashboard(projectId, actor); return <><Link href={`/projects/${projectId}`} className="inline-flex items-center gap-1 text-sm text-slate-500"><ArrowLeft className="size-4" />Dự án</Link><div className="mt-5"><p className="font-mono text-sm font-semibold text-blue-600">{data.project.code}</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Tổng quan {data.project.name}</h1><p className="mt-2 text-slate-600">Số liệu quy trình và tiến độ được tổng hợp từ dữ liệu hiện tại của dự án.</p></div><div className="mt-8 grid gap-4 sm:grid-cols-3"><OverviewCard icon={Bug} label="Tổng số lỗi" value={data.summary.totalBugs} note="Không bao gồm lỗi đã xóa" /><OverviewCard icon={RotateCcw} label="Tỷ lệ mở lại" value={`${data.summary.reopenRate}%`} note="Lỗi đã được mở lại ít nhất một lần" tone="amber" /><OverviewCard icon={Clock3} label="Thời gian xử lý TB" value={`${data.summary.averageResolutionHours} giờ`} note="Từ lúc tạo đến lần xử lý đầu tiên" tone="emerald" /></div><ProjectCharts byStatus={data.byStatus} byPriority={data.byPriority} bySeverity={data.bySeverity} byAssignee={data.byAssignee} daily={data.daily} /></>; }

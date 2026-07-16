@@ -1,7 +1,7 @@
 # Nhật kí các phase dự án BugFlow
 
 > Cập nhật gần nhất: 16/07/2026  
-> Phạm vi hiện tại: Phase 1 đến Phase 6 đã hoàn thành.
+> Phạm vi hiện tại: Phase 1 đến Phase 8 đã hoàn thành.
 > Nguồn đối chiếu: Git history, `README.md`, Prisma schema/migration/seed, source code và test hiện có.
 
 ## Quy ước cập nhật
@@ -481,7 +481,7 @@
 
 ---
 
-## Fix phát sinh sau Phase 6 — Bug/My Bug Prisma transaction timeout
+## Fix Bug phát sinh sau Phase 6 — Bug/My Bug Prisma transaction timeout
 
 ### Thời điểm
 
@@ -532,3 +532,215 @@
 - Production build: đạt; `/bugs` và `/my-bugs` được Next.js nhận diện là dynamic routes.
 - Type-check: đạt.
 - `git diff --check`: đạt.
+
+---
+
+## Phase 7 — Dashboard và thống kê
+
+### Mục tiêu
+
+- Xây dựng dashboard tổng quan và dashboard riêng cho từng project từ dữ liệu thật.
+- Thêm overview cards, biểu đồ và aggregation tối ưu, có kiểm tra quyền phía server.
+
+### Đã làm
+
+- Dashboard tổng quan hiển thị tổng project, tổng bug, bug mở/đóng, quá hạn, Critical và Blocker trong phạm vi actor được phép truy cập.
+- Tạo `/projects/[projectId]/dashboard`, kèm tổng bug, tỷ lệ reopen và thời gian xử lý trung bình.
+- Thêm donut chart theo status; bar chart theo priority, severity, assignee; line chart bug tạo/đóng trong 30 ngày.
+- Dữ liệu dùng Prisma `count`, `groupBy` và `select` tối thiểu, không hard-code số liệu.
+- Thêm loading skeleton, link từ trang project và Recharts Client Component; query/authentication vẫn ở server.
+- Thêm hai API dashboard dùng chung service layer và test quyền/aggregation.
+
+### Đã chỉnh sửa/cải thiện
+
+- Query dashboard chạy tuần tự để tránh đỉnh connection với Neon pool nhỏ.
+- Reopen rate là tỷ lệ bug riêng biệt từng chuyển sang `REOPENED`; average resolution tính từ `createdAt` đến `resolvedAt`.
+- README song ngữ được cập nhật trạng thái Phase 1–7, Recharts và roadmap Phase 8.
+
+### Bug gặp phải
+
+1. Cài `recharts` lần đầu trong sandbox thất bại với `EACCES` khi truy cập npm registry/cache.
+2. Bản vá thêm link dashboard không khớp vì JSX trang project nằm trên một dòng dài.
+
+### Cách fix
+
+1. Cài lại dependency với quyền được phê duyệt; không chạy `npm audit fix --force`.
+2. Tách bản vá API và UI, sau đó chỉnh đúng dòng JSX mà không ảnh hưởng nút settings.
+
+### File/khu vực liên quan
+
+- `src/features/dashboard/service.ts`
+- `src/components/dashboard/`
+- `src/app/(dashboard)/dashboard/`
+- `src/app/(dashboard)/projects/[projectId]/dashboard/`
+- `src/app/api/dashboard/overview/route.ts`
+- `src/app/api/projects/[projectId]/dashboard/route.ts`
+- `tests/dashboard-service.test.ts`
+- `package.json`, `package-lock.json`, `README.md`
+
+### Kiểm tra
+
+- Lint: đạt.
+- Test: 30/30 đạt trên 12 test files.
+- Production build: đạt; nhận diện dashboard pages và APIs mới.
+- Type-check: đạt.
+- `git diff --check`: đạt.
+
+### Ghi chú còn tồn đọng
+
+- Kiểm tra trực quan biểu đồ trên nhiều kích thước và dữ liệu production-like: **Cần xác minh thêm**.
+- Khi dữ liệu rất lớn, nên chuyển aggregation theo ngày/thời gian xử lý sang SQL hoặc materialized metrics.
+- Còn 5 cảnh báo moderate từ dependency audit; chưa force-fix để tránh breaking change.
+
+---
+
+## Fix phát sinh sau Phase 7 — Cảnh báo SSL mode PostgreSQL
+
+### Lỗi gặp phải
+
+- Khi chạy local, `pg-connection-string` cảnh báo các mode `prefer`, `require` và `verify-ca` sẽ đổi sang semantics libpq yếu hơn trong `pg` 9.
+- Cả `DATABASE_URL` và `DIRECT_URL` trong môi trường local đang dùng `sslmode=require`.
+
+### Nguyên nhân
+
+- Với phiên bản driver hiện tại, `sslmode=require` đang được xử lý tương đương `verify-full`. Driver cảnh báo để ứng dụng khai báo rõ ý định trước khi major version mới thay đổi hành vi.
+- Stack trace trỏ tới `DashboardLayout` vì đây là nơi request đầu tiên khởi tạo Prisma connection, không phải lỗi trong layout hoặc dashboard query.
+
+### Cách fix
+
+- Thêm `normalizePostgresUrl()` để chuyển `prefer`, `require` và `verify-ca` sang `sslmode=verify-full`, giữ nguyên các query parameter còn lại.
+- Áp dụng chuẩn hóa cho Prisma runtime, Prisma CLI/migration và seed.
+- Không ghi hoặc chỉnh trực tiếp secret trong nhật ký/source code; `.env.local` vẫn được Git ignore.
+- Thêm unit test cho cả ba legacy mode và trường hợp `verify-full` đã đúng.
+
+### File đã chỉnh sửa
+
+- `src/lib/database-url.ts`
+- `src/lib/prisma.ts`
+- `prisma.config.ts`
+- `prisma/seed.ts`
+- `tests/database-url.test.ts`
+- `README.md`
+- `nhat-ki-phases.md`
+
+### Kiểm tra
+
+- Prisma schema validation: đạt.
+- Type-check: đạt.
+- Test: 34/34 đạt trên 13 test files.
+- Lint: đạt.
+- Production build: đạt.
+- Kiểm tra log trực tiếp sau khi restart dev server: **Cần xác minh thêm**.
+
+### Trạng thái
+
+- Runtime không còn truyền `sslmode=require` tới PostgreSQL driver, đồng thời vẫn giữ certificate và hostname verification theo hành vi bảo mật hiện tại.
+
+---
+
+## Phase 8 — Hoàn thiện MVP
+
+### Mục tiêu
+
+- Triển khai attachment cloud, Kanban drag-and-drop, testing và UI polish.
+- Cải thiện accessibility, responsive navigation, README và hướng dẫn deployment.
+
+### Đã làm
+
+- Thêm upload attachment cho bug hoặc comment lên Cloudinary; không ghi file vào filesystem Vercel.
+- Hỗ trợ JPEG, PNG, WebP, GIF, MP4, WebM, log, text và PDF; kiểm tra MIME, extension thực thi và dung lượng phía server.
+- Lưu metadata attachment trong Neon, preview ảnh, mở/tải file và cho uploader hoặc manager xóa.
+- Khi thêm/xóa attachment, ghi activity log; upload cloud được cleanup nếu transaction database thất bại.
+- Tạo API `POST /api/uploads` và `DELETE /api/attachments/[attachmentId]` dùng service layer có authentication, membership và permission check.
+- Tạo Kanban project theo các cột workflow, card có code/title/priority/assignee/deadline.
+- Thêm DnD Kit, filter project board theo assignee/priority, optimistic move, rollback và toast khi server từ chối transition.
+- Mọi drop gọi status API hiện có và được `workflow-service` kiểm tra lại; client không quyết định quyền.
+- Thêm nút Board trong project detail, mobile navigation ngang, focus ring, accessible labels, live status và confirmation khi xóa.
+- Cấu hình Next Image chỉ cho phép ảnh từ `res.cloudinary.com`.
+- Cập nhật README song ngữ với trạng thái Phase 1–8, công nghệ, deployment và giới hạn sau MVP.
+- Giữ seed hiện tại idempotent với 5 user, 2 project, 18 bug, comments, activities và notifications; không seed attachment cloud giả.
+
+### Bug gặp phải
+
+1. Hai lần cài Cloudinary/DnD Kit đầu tiên bị timeout do network sandbox; lần đầu không cài package nào.
+2. Bản vá nối attachment vào trang bug không khớp vì JSX trang detail nằm trên dòng rất dài.
+3. React 19 ESLint báo `react-hooks/refs` khi component Kanban truy cập object trả về từ DnD hooks trực tiếp trong render.
+4. File `.log` từ trình duyệt có thể không có MIME type nên validation MIME thuần sẽ từ chối log hợp lệ.
+
+### Cách fix
+
+1. Xác minh package chưa được cài rồi chạy lại npm install với quyền mạng được phê duyệt và timeout phù hợp.
+2. Chia bản vá thành import/data và thay đúng dòng render hiện có.
+3. Destructure `useDraggable()`/`useDroppable()` ngay khi gọi hook và dùng các giá trị riêng trong JSX; lint sạch trở lại.
+4. Cho phép fallback extension `.log`/`.txt` khi MIME bị thiếu, nhưng vẫn chặn extension thực thi và giới hạn dung lượng.
+
+### File/khu vực liên quan
+
+- `src/lib/cloudinary.ts`
+- `src/lib/validators/attachment.ts`
+- `src/features/attachments/service.ts`
+- `src/components/attachments/attachment-panel.tsx`
+- `src/app/api/uploads/route.ts`
+- `src/app/api/attachments/[attachmentId]/route.ts`
+- `src/features/boards/service.ts`
+- `src/components/boards/kanban-board.tsx`
+- `src/app/(dashboard)/projects/[projectId]/board/page.tsx`
+- `src/app/(dashboard)/bugs/[bugId]/page.tsx`
+- `src/app/(dashboard)/projects/[projectId]/page.tsx`
+- `src/components/layout/dashboard-header.tsx`
+- `next.config.ts`
+- `.env.example`
+- `tests/attachment-validation.test.ts`
+- `tests/board-service.test.ts`
+- `package.json`, `package-lock.json`, `README.md`
+
+### Kiểm tra
+
+- Lint: đạt.
+- Test: 39/39 đạt trên 15 test files.
+- Production build: đạt; nhận diện `/projects/[projectId]/board`, `/api/uploads` và `/api/attachments/[attachmentId]`.
+- Type-check: đạt.
+- `git diff --check`: đạt.
+
+### Ghi chú còn tồn đọng
+
+- Upload/xóa Cloudinary thật cần credential hợp lệ và kiểm tra trực tiếp: **Cần xác minh thêm**.
+- Playwright E2E cho workflow hoàn chỉnh chưa có; unit/service tests đã đạt nhưng browser E2E production-like: **Cần xác minh thêm**.
+- Cần audit accessibility bằng keyboard/screen reader và responsive trên thiết bị thật trước production.
+- Còn 5 cảnh báo moderate từ npm audit; không chạy force-fix vì có nguy cơ breaking change.
+
+---
+
+## Fix giao diện sau Phase 8 — Đồng bộ ngôn ngữ tiếng Việt
+
+### Mục tiêu
+
+- Loại bỏ tình trạng trang đăng nhập dùng tiếng Việt nhưng các trang sau đăng nhập lại hiển thị tiếng Anh.
+- Chuẩn hóa nội dung giao diện và định dạng ngày giờ theo tiếng Việt.
+
+### Đã làm
+
+- Việt hóa luồng đăng nhập/đăng ký, điều hướng, dashboard, hồ sơ, thông báo, dự án, danh sách lỗi, biểu mẫu lỗi, bình luận và Kanban.
+- Đổi metadata của các trang chính sang tiếng Việt.
+- Chuẩn hóa ngày giờ hiển thị bằng locale `vi-VN` tại các khu vực đã rà soát.
+- Giữ nguyên các giá trị enum/API nội bộ để không ảnh hưởng dữ liệu và nghiệp vụ.
+
+### Nguyên nhân
+
+- Nhiều chuỗi UI được viết cứng bằng tiếng Anh trong từng page/component, chưa có lớp bản địa hóa dùng chung.
+
+### File/khu vực liên quan
+
+- `src/app/(auth)/*`
+- `src/app/(dashboard)/*`
+- `src/components/auth/*`
+- `src/components/bugs/*`
+- `src/components/projects/*`
+- `src/components/notifications/*`
+- `src/components/comments/*`
+- `src/components/boards/*`
+- `src/components/activities/*`
+
+### Ghi chú
+
+- Ứng dụng hiện thống nhất ngôn ngữ hiển thị chính là tiếng Việt. Các tên công nghệ, mã lỗi và enum lưu trong cơ sở dữ liệu vẫn giữ nguyên theo thiết kế kỹ thuật.

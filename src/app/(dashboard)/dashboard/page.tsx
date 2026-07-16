@@ -1,9 +1,6 @@
-import { Bug, FolderKanban, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Ban, Bug, CircleCheck, CircleDot, FolderKanban, ShieldAlert } from "lucide-react";
 import { requirePageUser } from "@/lib/auth";
-
-export const metadata = { title: "Dashboard" };
-export default async function DashboardPage() {
-  const user = await requirePageUser();
-  const cards = [{ icon: FolderKanban, label: "Projects", value: "—", note: "Available in Phase 4" }, { icon: Bug, label: "Assigned bugs", value: "—", note: "Available in Phase 5" }, { icon: ShieldCheck, label: "System role", value: user.systemRole.replaceAll("_", " "), note: "Enforced on the server" }];
-  return <><div><p className="text-sm font-medium text-blue-600">Overview</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Good to see you, {user.fullName.split(" ")[0]}</h1><p className="mt-2 text-slate-600">Your authenticated workspace is ready.</p></div><div className="mt-8 grid gap-4 md:grid-cols-3">{cards.map(({ icon: Icon, label, value, note }) => <article key={label} className="rounded-xl border bg-white p-5 shadow-sm"><Icon className="size-5 text-blue-600" /><p className="mt-5 text-sm text-slate-500">{label}</p><p className="mt-1 text-xl font-semibold capitalize">{value.toLowerCase()}</p><p className="mt-3 text-xs text-slate-400">{note}</p></article>)}</div></>;
-}
+import { getOverviewDashboard } from "@/features/dashboard/service";
+import { OverviewCard } from "@/components/dashboard/overview-card";
+export const metadata = { title: "Tổng quan" };
+export default async function DashboardPage() { const user = await requirePageUser(); const data = await getOverviewDashboard(user); const cards = [{ icon: FolderKanban, label: "Dự án", value: data.projects, note: "Dự án bạn có quyền truy cập", tone: "blue" as const }, { icon: Bug, label: "Tổng số lỗi", value: data.totalBugs, note: "Không bao gồm lỗi đã xóa", tone: "blue" as const }, { icon: CircleDot, label: "Lỗi đang mở", value: data.openBugs, note: "Vẫn cần xử lý", tone: "amber" as const }, { icon: CircleCheck, label: "Lỗi đã đóng", value: data.closedBugs, note: "Đã xác nhận hoàn tất", tone: "emerald" as const }, { icon: AlertTriangle, label: "Quá hạn", value: data.overdueBugs, note: "Chưa đóng và đã quá hạn", tone: "red" as const }, { icon: ShieldAlert, label: "Nghiêm trọng", value: data.criticalBugs, note: "Mức độ Critical", tone: "red" as const }, { icon: Ban, label: "Chặn hệ thống", value: data.blockerBugs, note: "Mức độ Blocker", tone: "red" as const }]; return <><div><p className="text-sm font-medium text-blue-600">Tổng quan</p><h1 className="mt-1 text-3xl font-semibold tracking-tight">Chào {user.fullName.split(" ").at(-1)}</h1><p className="mt-2 text-slate-600">Số liệu trực tiếp từ các dự án bạn được phép truy cập.</p></div><div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{cards.map((card) => <OverviewCard key={card.label} {...card} />)}</div></>; }
