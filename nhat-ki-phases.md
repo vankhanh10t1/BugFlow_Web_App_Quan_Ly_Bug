@@ -1,7 +1,7 @@
 # Nhật kí các phase dự án BugFlow
 
 > Cập nhật gần nhất: 16/07/2026  
-> Phạm vi hiện tại: Phase 1 đến Phase 5. Phase 6 chưa bắt đầu.  
+> Phạm vi hiện tại: Phase 1 đến Phase 6 đã hoàn thành.
 > Nguồn đối chiếu: Git history, `README.md`, Prisma schema/migration/seed, source code và test hiện có.
 
 ## Quy ước cập nhật
@@ -402,15 +402,133 @@
 
 ---
 
-## Phase 6 — Chưa bắt đầu
+## Phase 6 — Workflow, trao đổi và thông báo
 
-### Phạm vi dự kiến theo đặc tả
+### Mục tiêu
 
-- Status transition theo workflow và role.
-- Activity timeline.
-- Comment create/edit/delete và mention cơ bản.
-- Notification và polling.
+- Hoàn thiện chuyển trạng thái bug theo workflow, project role và người được giao xử lý.
+- Hiển thị lịch sử hoạt động chỉ đọc trên trang chi tiết bug.
+- Cung cấp comment create/edit/delete, mention `@username` và thông báo liên quan.
+- Cung cấp danh sách notification, số chưa đọc và polling phù hợp với Vercel Serverless.
 
-### Trạng thái
+### Đã làm
 
-Chưa triển khai. Phải cập nhật phần này sau khi Phase 6 hoàn thành, bao gồm bug gặp phải, cách fix, file chính và việc còn lại.
+- Tạo service chuyển trạng thái; chỉ manager/admin, tester hoặc developer được assign mới có các transition phù hợp.
+- Ghi `resolvedAt`, `closedAt`, activity `STATUS_CHANGED` và notification trong cùng transaction với cập nhật status.
+- Thêm control workflow trên trang chi tiết bug và chỉ hiển thị các trạng thái actor hiện tại được phép chọn.
+- Thêm activity timeline chỉ đọc, sắp xếp mới nhất trước và giới hạn 100 bản ghi.
+- Thêm comment theo thứ tự thời gian; tác giả được sửa/xóa comment của mình, admin/project manager được xóa comment không phù hợp bằng soft delete.
+- Parse mention `@username` cơ bản, chỉ nhận user active thuộc project; tạo notification cho người được mention, reporter và assignee mà không gửi trùng hoặc tự gửi.
+- Không render HTML thô từ nội dung comment; nội dung được React escape và vẫn giữ xuống dòng.
+- Thêm API cho status, comments, activities và notifications dùng chung service layer với Server Actions.
+- Cài TanStack Query, thêm provider ở dashboard layout và polling notification mỗi 30 giây khi người dùng đã đăng nhập.
+- Thêm icon notification có badge, trang `/notifications`, đánh dấu một hoặc tất cả notification đã đọc và link mở bug liên quan.
+- Thêm test workflow theo vai trò và kiểm tra notification chỉ được đánh dấu bởi đúng recipient.
+
+### Đã chỉnh sửa/cải thiện
+
+- Export access context dùng chung của bug service để comment, activity và workflow cùng áp dụng một kiểm tra membership/IDOR.
+- Route notification chuẩn hóa page không hợp lệ về trang 1.
+- README tiếng Việt và tiếng Anh được cập nhật trạng thái Phase 1–6, dependency TanStack Query và roadmap từ Phase 7.
+
+### Bug gặp phải
+
+1. TypeScript báo `string | null` khi danh sách recipient chứa `assigneeId` có thể rỗng.
+2. Bản vá đầu tiên cho trang bug detail không khớp vì file cũ được trình bày trên các dòng JSX rất dài.
+
+### Cách fix
+
+1. Lọc `null` bằng type predicate trước khi so sánh và đưa recipient vào `Set`.
+2. Thay trang bug detail bằng phiên bản được định dạng lại, giữ nguyên chức năng Phase 5 rồi nối thêm workflow, comment và activity.
+
+### File/khu vực liên quan
+
+- `src/features/bugs/workflow-service.ts`
+- `src/features/bugs/workflow-actions.ts`
+- `src/features/comments/`
+- `src/features/activities/`
+- `src/features/notifications/`
+- `src/lib/validators/comment.ts`
+- `src/lib/validators/workflow.ts`
+- `src/app/(dashboard)/bugs/[bugId]/page.tsx`
+- `src/app/(dashboard)/notifications/`
+- `src/app/api/bugs/[bugId]/status/`
+- `src/app/api/bugs/[bugId]/comments/`
+- `src/app/api/bugs/[bugId]/activities/`
+- `src/app/api/comments/`
+- `src/app/api/notifications/`
+- `src/components/bugs/status-transition-form.tsx`
+- `src/components/comments/comment-thread.tsx`
+- `src/components/activities/activity-timeline.tsx`
+- `src/components/notifications/`
+- `src/components/providers/query-provider.tsx`
+- `tests/workflow-role.test.ts`
+- `tests/notification-service.test.ts`
+- `README.md`
+
+### Kiểm tra
+
+- Lint: đạt.
+- Type-check: đạt.
+- Test: 27/27 đạt trên 11 test files.
+- Production build: đạt; Next.js nhận diện các route workflow, comment, activity và notification.
+
+### Ghi chú còn tồn đọng
+
+- Chưa có E2E browser test cho toàn bộ luồng tester → manager → developer → tester: **Cần xác minh thêm**.
+- Notification deadline và realtime push chưa triển khai; polling 30 giây là cơ chế MVP hiện tại.
+- Comment hiện dùng textarea thuần theo phạm vi MVP, chưa có rich text editor hoặc attachment.
+
+---
+
+## Fix phát sinh sau Phase 6 — Bug/My Bug Prisma transaction timeout
+
+### Thời điểm
+
+- 16/07/2026, sau khi hoàn thành Phase 6 và trước Phase 7.
+
+### Lỗi gặp phải
+
+- Khi mở menu `Bugs` hoặc `My bugs` trên local, Prisma báo `Transaction API error: Unable to start a transaction in the given time` tại query danh sách bug.
+
+### Nguyên nhân
+
+- `listBugs()` dùng batch `prisma.$transaction([findMany, count])` cho hai truy vấn chỉ đọc. Việc này buộc Prisma xin một transaction connection dù danh sách không cần transaction isolation; Neon cold start hoặc pool đang bận có thể khiến bước bắt đầu transaction hết thời gian chờ.
+- Trang còn chạy query danh sách, project filter và people filter song song, tạo thêm đỉnh kết nối khi route RSC được mở.
+- Prisma client không phải nguyên nhân: `src/lib/prisma.ts` đã dùng global singleton trong development và chỉ tạo client mới khi chưa có instance.
+- Các filter chính đã có index cho project/status, priority, severity, assignee, reporter, due date, created date và soft-delete. Search `contains` không tận dụng B-tree thông thường, nhưng dữ liệu/pagination hiện tại chưa đủ căn cứ để thêm migration trigram index.
+
+### Cách fix
+
+- Bỏ `$transaction` khỏi query danh sách; chạy `findMany` rồi `count` tuần tự để không cần transaction connection và giảm áp lực pool.
+- Giữ nguyên `where`, `orderBy`, `skip`, `take`, DTO `select`, pagination, search, filter và sort hiện có.
+- Chạy tuần tự query danh sách và dữ liệu filter trên `BugList` để ổn định hơn với pool nhỏ/cold start trong development.
+- Thêm server log có context an toàn rồi rethrow lỗi, không biến lỗi database thành empty state.
+- Thêm error boundary cho dashboard với thông báo thân thiện, mã tham chiếu và nút thử lại theo API Next.js 16.2.
+- Thêm unit test xác nhận list bug không gọi `$transaction`, vẫn gọi `findMany/count` và giữ pagination.
+
+### File đã chỉnh sửa
+
+- `src/features/bugs/service.ts`
+- `src/components/bugs/bug-list.tsx`
+- `src/app/(dashboard)/error.tsx`
+- `tests/bug-service.test.ts`
+- `nhat-ki-phases.md`
+
+### Cách test lại
+
+- Chạy lint, test, production build và type-check.
+- Unit test kiểm tra query list dùng `findMany` và `count` tuần tự, không mở transaction.
+- Kiểm tra production build nhận diện cả `/bugs`, `/my-bugs` và dashboard error boundary.
+- Kiểm tra thao tác trực tiếp trên trình duyệt với Neon local credentials: **Cần xác minh thêm**.
+
+### Trạng thái sau khi fix
+
+- Đã loại bỏ điểm phát sinh transaction timeout khỏi cả `Bugs` và `My bugs`, vì hai trang dùng chung `listBugs()`/`BugList`.
+- Pagination, filter, search và sort được giữ nguyên.
+- Prisma singleton development được xác nhận đúng và không cần chỉnh sửa.
+- Lint: đạt.
+- Test: 28/28 đạt trên 11 test files.
+- Production build: đạt; `/bugs` và `/my-bugs` được Next.js nhận diện là dynamic routes.
+- Type-check: đạt.
+- `git diff --check`: đạt.

@@ -23,7 +23,7 @@ async function assertProjectAccess(projectId: string, actor: BugActor) {
   return { project, role };
 }
 
-async function bugWithAccess(bugId: string, actor: BugActor) {
+export async function getBugAccessContext(bugId: string, actor: BugActor) {
   const bug = await prisma.bug.findFirst({ where: { id: bugId, deletedAt: null }, select: { id: true, projectId: true, reporterId: true, assigneeId: true, status: true, priority: true, severity: true } });
   if (!bug) throw new AppError("RESOURCE_NOT_FOUND", "Bug not found", 404);
   const access = await assertProjectAccess(bug.projectId, actor);
@@ -66,15 +66,20 @@ export async function listBugs(actor: BugActor, query: BugQuery & { mine?: boole
     ...(query.search ? { OR: [{ title: { contains: query.search, mode: "insensitive" } }, { bugCode: { contains: query.search, mode: "insensitive" } }] } : {}),
   };
   const orderBy = { [query.sortBy]: query.sortOrder } as Prisma.BugOrderByWithRelationInput;
-  const [items, total] = await prisma.$transaction([
-    prisma.bug.findMany({ where, select: { id: true, bugCode: true, title: true, status: true, priority: true, severity: true, dueDate: true, createdAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect } }, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize }),
-    prisma.bug.count({ where }),
-  ]);
-  return { items, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } };
+  try {
+    // These read-only queries do not need transaction isolation. Running them
+    // sequentially also avoids a connection spike when a Neon compute wakes up.
+    const items = await prisma.bug.findMany({ where, select: { id: true, bugCode: true, title: true, status: true, priority: true, severity: true, dueDate: true, createdAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect } }, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize });
+    const total = await prisma.bug.count({ where });
+    return { items, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } };
+  } catch (error) {
+    console.error("[bugs:list] Failed to load bug list", { actorId: actor.id, mine: Boolean(query.mine), page: query.page, error });
+    throw error;
+  }
 }
 
 export async function getBug(bugId: string, actor: BugActor) {
-  const access = await bugWithAccess(bugId, actor);
+  const access = await getBugAccessContext(bugId, actor);
   const bug = await prisma.bug.findFirst({
     where: { id: bugId, deletedAt: null },
     select: { id: true, bugCode: true, title: true, description: true, reproductionSteps: true, expectedResult: true, actualResult: true, environment: true, browser: true, operatingSystem: true, applicationVersion: true, status: true, priority: true, severity: true, dueDate: true, resolvedAt: true, closedAt: true, createdAt: true, updatedAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect }, tester: { select: personSelect } },
@@ -98,7 +103,7 @@ export async function createBug(actor: BugActor, input: BugInput) {
 }
 
 export async function updateBug(bugId: string, actor: BugActor, input: BugUpdateInput) {
-  const access = await bugWithAccess(bugId, actor);
+  const access = await getBugAccessContext(bugId, actor);
   const canManage = canManageProject(actor.systemRole, access.role);
   if (!canManage && !(access.bug.reporterId === actor.id && access.bug.status === "NEW")) throw new AppError("FORBIDDEN", "You cannot edit this bug", 403);
   return prisma.$transaction(async (tx) => {
@@ -115,7 +120,7 @@ export async function listProjectDevelopers(projectId: string, actor: BugActor) 
 }
 
 export async function assignBug(bugId: string, actor: BugActor, assigneeId: string | null) {
-  const access = await bugWithAccess(bugId, actor);
+  const access = await getBugAccessContext(bugId, actor);
   const canManage = canManageProject(actor.systemRole, access.role);
   const selfAssign = assigneeId === actor.id && !access.bug.assigneeId && access.role === "DEVELOPER";
   if (!canManage && !selfAssign) throw new AppError("FORBIDDEN", "You cannot assign this bug", 403);
@@ -134,11 +139,11 @@ export async function assignBug(bugId: string, actor: BugActor, assigneeId: stri
 }
 
 export async function updateBugPriority(bugId: string, actor: BugActor, priority: BugPriority) {
-  const access = await bugWithAccess(bugId, actor); if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Only project managers can change priority", 403);
+  const access = await getBugAccessContext(bugId, actor); if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Only project managers can change priority", 403);
   return prisma.$transaction(async (tx) => { const bug = await tx.bug.update({ where: { id: bugId }, data: { priority } }); await tx.activityLog.create({ data: { projectId: access.bug.projectId, bugId, actorId: actor.id, actionType: "PRIORITY_CHANGED", fieldName: "priority", oldValue: access.bug.priority, newValue: priority, description: "Changed bug priority" } }); return bug; });
 }
 
 export async function updateBugSeverity(bugId: string, actor: BugActor, severity: BugSeverity) {
-  const access = await bugWithAccess(bugId, actor); if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Only project managers can change severity", 403);
+  const access = await getBugAccessContext(bugId, actor); if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Only project managers can change severity", 403);
   return prisma.$transaction(async (tx) => { const bug = await tx.bug.update({ where: { id: bugId }, data: { severity } }); await tx.activityLog.create({ data: { projectId: access.bug.projectId, bugId, actorId: actor.id, actionType: "SEVERITY_CHANGED", fieldName: "severity", oldValue: access.bug.severity, newValue: severity, description: "Changed bug severity" } }); return bug; });
 }

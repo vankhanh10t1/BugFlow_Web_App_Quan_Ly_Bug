@@ -1,0 +1,6 @@
+"use client";
+import { useActionState } from "react";
+import type { BugStatus } from "@/generated/prisma/enums";
+import { transitionBugAction } from "@/features/bugs/workflow-actions";
+const labels: Record<BugStatus, string> = { NEW: "New", ASSIGNED: "Assigned", IN_PROGRESS: "In progress", RESOLVED: "Resolved", READY_FOR_TEST: "Ready for test", REOPENED: "Reopened", CLOSED: "Closed", REJECTED: "Rejected", DUPLICATE: "Duplicate" };
+export function StatusTransitionForm({ bugId, statuses }: { bugId: string; statuses: BugStatus[] }) { const [state, action, pending] = useActionState(transitionBugAction.bind(null, bugId), undefined); if (!statuses.length) return <p className="mt-3 text-xs text-slate-500">No status changes are available for your role.</p>; return <form action={action} className="mt-4 space-y-2"><select name="status" className="h-10 w-full rounded-lg border bg-white px-3 text-sm">{statuses.map((status) => <option key={status} value={status}>{labels[status]}</option>)}</select><button disabled={pending} className="h-10 w-full rounded-lg bg-slate-900 text-sm font-medium text-white disabled:opacity-60">{pending ? "Updating…" : "Update status"}</button>{state ? <p className={`text-xs ${state.success ? "text-emerald-700" : "text-red-600"}`}>{state.message}</p> : null}</form>; }

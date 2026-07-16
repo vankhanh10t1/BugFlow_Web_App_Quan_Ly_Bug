@@ -2,16 +2,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   projectFindUnique: vi.fn(), projectUpdate: vi.fn(), memberFindUnique: vi.fn(),
-  bugFindFirst: vi.fn(), bugCreate: vi.fn(), bugUpdate: vi.fn(), activityCreate: vi.fn(), notificationCreate: vi.fn(), transaction: vi.fn(),
+  bugFindFirst: vi.fn(), bugFindMany: vi.fn(), bugCount: vi.fn(), bugCreate: vi.fn(), bugUpdate: vi.fn(), activityCreate: vi.fn(), notificationCreate: vi.fn(), transaction: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/prisma", () => ({ prisma: {
-  project: { findUnique: mocks.projectFindUnique }, projectMember: { findUnique: mocks.memberFindUnique }, bug: { findFirst: mocks.bugFindFirst },
+  project: { findUnique: mocks.projectFindUnique }, projectMember: { findUnique: mocks.memberFindUnique }, bug: { findFirst: mocks.bugFindFirst, findMany: mocks.bugFindMany, count: mocks.bugCount },
   $transaction: mocks.transaction,
 } }));
 
-import { assignBug, createBug, getBug } from "@/features/bugs/service";
+import { assignBug, createBug, getBug, listBugs } from "@/features/bugs/service";
 
 const bugInput = { projectId: "project-1", title: "Checkout fails on Safari", description: "The checkout request fails after submitting payment.", priority: "HIGH" as const, severity: "CRITICAL" as const };
 
@@ -49,5 +49,16 @@ describe("bug service", () => {
     mocks.projectFindUnique.mockResolvedValue({ id: "project-1", status: "ACTIVE" });
     mocks.memberFindUnique.mockResolvedValue(null);
     await expect(getBug("bug-1", { id: "outsider-1", systemRole: "DEVELOPER" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("lists bugs without opening a read-only transaction", async () => {
+    mocks.bugFindMany.mockResolvedValue([{ id: "bug-1" }]);
+    mocks.bugCount.mockResolvedValue(1);
+    const result = await listBugs({ id: "admin-1", systemRole: "ADMIN" }, { sortBy: "createdAt", sortOrder: "desc", page: 1, pageSize: 20 });
+    expect(result.pagination.total).toBe(1);
+    expect(mocks.bugFindMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 20 }));
+    expect(mocks.bugCount).toHaveBeenCalledOnce();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.bugFindMany.mock.invocationCallOrder[0]).toBeLessThan(mocks.bugCount.mock.invocationCallOrder[0]);
   });
 });

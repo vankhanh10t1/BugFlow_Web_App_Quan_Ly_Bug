@@ -10,7 +10,7 @@ BugFlow là hệ thống theo dõi lỗi và quản lý issue dành cho nhóm ph
 
 ### Trạng thái hiện tại
 
-Phase 1–5 đã hoàn thành. Dự án hiện có:
+Phase 1–6 đã hoàn thành. Dự án hiện có:
 
 - Nền tảng Next.js và Neon PostgreSQL.
 - Authentication và authorization.
@@ -18,8 +18,9 @@ Phase 1–5 đã hoàn thành. Dự án hiện có:
 - Bug core với mã bug an toàn trong transaction.
 - Tạo, chỉnh sửa, tìm kiếm, lọc, sắp xếp và phân trang bug phía server.
 - Priority, severity và phân công developer kèm activity/notification.
+- Workflow chuyển trạng thái theo vai trò, comment có mention, activity timeline và notification polling mỗi 30 giây.
 
-Phase 6 chưa bắt đầu: workflow transition đầy đủ, comments, activity timeline và notification polling.
+Phase 7 là bước tiếp theo: dashboard aggregation, overview cards, charts và project dashboard.
 
 Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 
@@ -31,7 +32,7 @@ Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 - React Hook Form, Zod
 - Prisma 7, `@prisma/adapter-pg`, Neon PostgreSQL
 - Vitest
-- Dự kiến: TanStack Query, Recharts, DnD Kit, Cloudinary
+- TanStack Query; dự kiến bổ sung Recharts, DnD Kit và Cloudinary
 
 ### Tính năng đã triển khai
 
@@ -120,7 +121,7 @@ flowchart LR
   ASSIGNED --> NEW
 ```
 
-Danh sách transition nằm trong `src/features/bugs/workflow.ts`. Validation đầy đủ theo actor/role và UI transition thuộc Phase 6.
+Danh sách transition nằm trong `src/features/bugs/workflow.ts`; service Phase 6 kiểm tra actor, project role và assignee trước mọi thay đổi trạng thái.
 
 ### Vai trò và quyền
 
@@ -245,7 +246,7 @@ npm run build
 npm run type-check
 ```
 
-Trạng thái xác minh gần nhất: 8 test files, 21 tests đạt; lint, type-check và production build đều đạt.
+Trạng thái xác minh gần nhất: 11 test files, 27 tests đạt; lint, type-check và production build đều đạt.
 
 ### Deploy lên Vercel
 
@@ -257,13 +258,11 @@ Trạng thái xác minh gần nhất: 8 test files, 21 tests đạt; lint, type-
 
 ### Roadmap
 
-1. **Phase 6:** workflow transitions, comments, activity timeline, notification polling.
-2. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
-3. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
+1. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
+2. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
 
 ### Giới hạn hiện tại
 
-- Chưa có comment UI, mention hoặc notification polling.
 - Chưa có dashboard analytics hoặc charts.
 - Chưa có attachment upload/storage integration.
 - Chưa có Kanban và drag-and-drop.
@@ -285,7 +284,7 @@ BugFlow is a bug tracking and issue management system for software development t
 
 ### Current status
 
-Phases 1–5 are complete. The project currently includes:
+Phases 1–6 are complete. The project currently includes:
 
 - A Next.js and Neon PostgreSQL foundation.
 - Authentication and authorization.
@@ -293,8 +292,9 @@ Phases 1–5 are complete. The project currently includes:
 - A bug core with transaction-safe readable bug codes.
 - Server-side bug creation, editing, search, filtering, sorting, and pagination.
 - Priority, severity, and developer assignment with activity and notification records.
+- Role-aware status transitions, comments with mentions, an activity timeline, and notification polling every 30 seconds.
 
-Phase 6 has not started: complete workflow transitions, comments, activity timeline, and notification polling.
+Phase 7 is next: dashboard aggregations, overview cards, charts, and a project dashboard.
 
 See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 
@@ -306,7 +306,7 @@ See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 - React Hook Form, Zod
 - Prisma 7, `@prisma/adapter-pg`, Neon PostgreSQL
 - Vitest
-- Planned: TanStack Query, Recharts, DnD Kit, Cloudinary
+- TanStack Query; Recharts, DnD Kit, and Cloudinary are planned
 
 ### Implemented features
 
@@ -395,7 +395,7 @@ flowchart LR
   ASSIGNED --> NEW
 ```
 
-The transition map is centralized in `src/features/bugs/workflow.ts`. Full actor/role validation and transition UI belong to Phase 6.
+The transition map is centralized in `src/features/bugs/workflow.ts`; the Phase 6 service validates the actor, project role, and assignee before every status change.
 
 ### Roles and permissions
 
@@ -520,7 +520,7 @@ npm run build
 npm run type-check
 ```
 
-Latest verified state: 8 test files, 21 passing tests; lint, type-check, and production build all pass.
+Latest verified state: 11 test files, 27 passing tests; lint, type-check, and production build all pass.
 
 ### Deploy to Vercel
 
@@ -532,13 +532,11 @@ Latest verified state: 8 test files, 21 passing tests; lint, type-check, and pro
 
 ### Roadmap
 
-1. **Phase 6:** workflow transitions, comments, activity timeline, notification polling.
-2. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
-3. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
+1. **Phase 7:** dashboard aggregations, overview cards, charts, project dashboard.
+2. **Phase 8:** attachments, Kanban, accessibility, responsive polish, E2E, deployment.
 
 ### Current limitations
 
-- No comment UI, mentions, or notification polling yet.
 - No dashboard analytics or charts yet.
 - No attachment upload/storage integration yet.
 - No Kanban or drag-and-drop yet.
