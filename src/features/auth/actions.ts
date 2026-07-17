@@ -27,11 +27,12 @@ export async function loginAction(_: AuthActionState, formData: FormData): Promi
   }
 
   try {
-    await signIn("credentials", { ...parsed.data, redirectTo: "/dashboard" });
+    await signIn("credentials", { ...parsed.data, redirect: false });
   } catch (error) {
     if (error instanceof AuthError) return { success: false, message: "Email hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa" };
     throw error;
   }
+  redirect("/dashboard");
 }
 
 export async function registerAction(_: AuthActionState, formData: FormData): Promise<AuthActionState> {
@@ -46,13 +47,15 @@ export async function registerAction(_: AuthActionState, formData: FormData): Pr
   }
 
   try {
-    await signIn("credentials", { email: parsed.data.email, password: parsed.data.password, redirectTo: "/dashboard" });
+    await signIn("credentials", { email: parsed.data.email, password: parsed.data.password, redirect: false });
   } catch (error) {
     if (error instanceof AuthError) redirect("/login");
     throw error;
   }
+  redirect("/dashboard");
 }
 
 export async function logoutAction() {
-  await signOut({ redirectTo: "/login" });
+  await signOut({ redirect: false });
+  redirect("/login");
 }

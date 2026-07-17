@@ -598,3 +598,20 @@ Migration cần triển khai: `20260717010000_two_factor_authentication`. Chạy
 - Security events are recorded in the activity log.
 
 Configure `TWO_FACTOR_ENCRYPTION_KEY`, `TWO_FACTOR_CHALLENGE_TTL_MINUTES`, and `TWO_FACTOR_MAX_ATTEMPTS` as shown above in both local and Vercel environments. Deploy migration `20260717010000_two_factor_authentication` before releasing 2FA.
+
+### Kiểm tra redirect production và 2FA trên Vercel
+
+Không đặt `AUTH_URL` hoặc `NEXTAUTH_URL` thành `http://localhost:3000` trong scope Production/Preview. Trên Vercel, nên xóa hai biến này để Auth.js nhận host hiện tại từ request của Vercel; nếu cần cố định domain chính, đặt `AUTH_URL=https://ten-mien-cua-ban`. Sau khi thay đổi environment variables phải redeploy.
+
+Các biến production cần có:
+
+```env
+AUTH_SECRET="a-long-random-secret"
+TWO_FACTOR_ENCRYPTION_KEY="base64-encoded-32-byte-key"
+TWO_FACTOR_CHALLENGE_TTL_MINUTES="5"
+TWO_FACTOR_MAX_ATTEMPTS="5"
+```
+
+Để kiểm tra bằng tài khoản demo, đăng nhập tài khoản seed, mở mục **Bảo mật** trên thanh điều hướng, bật 2FA và lưu recovery code. Đăng xuất rồi đăng nhập lại: sau bước email/mật khẩu, ứng dụng phải mở `/login/verify-2fa`; chỉ mã TOTP hoặc recovery code hợp lệ mới tạo session và chuyển tới `/dashboard` trên cùng domain.
+
+Production/Preview redirects are performed with application-relative paths after Auth.js has created or removed the session. Do not configure a localhost `AUTH_URL`/`NEXTAUTH_URL` in Vercel. Remove those variables so Auth.js uses the current Vercel request host, or set `AUTH_URL` to the canonical HTTPS domain, then redeploy. Enable 2FA for a seed account from the **Bảo mật** navigation item before testing the two-step sign-in flow.

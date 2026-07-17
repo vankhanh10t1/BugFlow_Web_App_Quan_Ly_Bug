@@ -941,3 +941,41 @@
 
 - Chưa chạy browser E2E với ứng dụng Authenticator thật vì `.env.local` hiện chưa có `TWO_FACTOR_ENCRYPTION_KEY`: **Cần người vận hành cấu hình và xác minh thêm**.
 - Rate limit mật khẩu hiện là best-effort theo từng tiến trình; giới hạn số lần thử 2FA nằm trong database và hoạt động xuyên instance. Nếu cần chống brute-force phân tán ở quy mô lớn, nên chuyển password rate limit sang Redis/KV hoặc bảng database chuyên dụng.
+
+---
+
+## Fix sau Phase 4 — Redirect production và khả năng tìm thấy 2FA
+
+### Lỗi gặp phải
+
+- Sau khi đăng nhập trên Vercel, trình duyệt bị chuyển về `localhost`.
+- Người dùng demo chưa nhìn thấy rõ nơi bật 2FA nên tưởng luồng 2FA chưa tồn tại.
+
+### Nguyên nhân
+
+- Các action đăng nhập/đăng ký/đăng xuất giao việc điều hướng cho Auth.js qua `redirectTo`. Auth.js dựng URL callback dựa trên request host hoặc `AUTH_URL`; nếu biến Vercel này vẫn là `http://localhost:3000`, redirect production sẽ trỏ sai.
+- 2FA chỉ xuất hiện trong lần đăng nhập sau khi tài khoản đã tự bật tại trang Security Settings; trước đó trang này chỉ được liên kết từ hồ sơ và chưa có mục điều hướng riêng.
+
+### Cách fix
+
+- Gọi Auth.js với `redirect: false` để chỉ tạo/xóa session cookie, sau đó dùng `redirect('/dashboard')` hoặc `redirect('/login')` tương đối từ Next.js Server Action.
+- Giữ luồng 2FA hiện có: bước mật khẩu tạo challenge HttpOnly, chuyển tới `/login/verify-2fa`, và chỉ cấp session sau TOTP/recovery code hợp lệ.
+- Thêm mục **Bảo mật** trên navigation cho mọi người dùng đã đăng nhập.
+- Cập nhật `.env.example` và README: Vercel không được dùng `AUTH_URL`/`NEXTAUTH_URL` localhost; xóa biến để dùng host hiện tại hoặc đặt đúng canonical HTTPS domain rồi redeploy.
+- Không bật sẵn 2FA trong seed vì secret phải thuộc ứng dụng Authenticator của người kiểm thử. Tài khoản seed có thể tự bật 2FA tại `/settings/security`.
+
+### File đã sửa
+
+- `src/features/auth/actions.ts`
+- `src/components/layout/dashboard-header.tsx`
+- `.env.example`
+- `README.md`
+- `nhat-ki-phases.md`
+
+### Cách test production
+
+1. Kiểm tra Vercel Production/Preview không có `AUTH_URL` hoặc `NEXTAUTH_URL` mang giá trị localhost; cấu hình các secret 2FA và redeploy.
+2. Đăng nhập tài khoản chưa bật 2FA: phải tới `/dashboard` trên cùng domain Vercel.
+3. Mở **Bảo mật**, bật 2FA bằng QR và lưu recovery code.
+4. Đăng xuất, đăng nhập lại: phải tới `/login/verify-2fa`, mã sai hiển thị lỗi, mã đúng tới `/dashboard` trên cùng domain.
+5. Đăng xuất lần nữa và kiểm tra một recovery code hợp lệ; code đó không thể sử dụng lại.
