@@ -1,0 +1,2 @@
+"use client";
+export default function AdminUsersError({ unstable_retry }: { error: Error; unstable_retry: () => void }) { return <div className="rounded-xl border border-red-200 bg-red-50 p-6"><h1 className="font-semibold text-red-900">Không thể tải danh sách người dùng</h1><p className="mt-2 text-sm text-red-700">Đã xảy ra lỗi khi kết nối dữ liệu. Vui lòng thử lại.</p><button onClick={unstable_retry} className="mt-4 rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white">Thử lại</button></div>; }

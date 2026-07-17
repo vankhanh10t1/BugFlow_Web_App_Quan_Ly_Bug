@@ -744,3 +744,138 @@
 ### Ghi chú
 
 - Ứng dụng hiện thống nhất ngôn ngữ hiển thị chính là tiếng Việt. Các tên công nghệ, mã lỗi và enum lưu trong cơ sở dữ liệu vẫn giữ nguyên theo thiết kế kỹ thuật.
+
+---
+
+## Bổ sung sau Phase 8 — Admin User Management
+
+### Mục tiêu
+
+- Hoàn thiện chức năng bắt buộc để Admin quản lý tài khoản toàn hệ thống tại `/admin/users`.
+
+### Đã làm
+
+- Thêm danh sách người dùng có tìm kiếm và phân trang phía server.
+- Thêm form/modal tạo và chỉnh sửa tài khoản bằng dữ liệu Prisma thật.
+- Thêm đổi `systemRole`, khóa, mở khóa và vô hiệu hóa mềm bằng trạng thái `INACTIVE`.
+- Chặn Admin tự khóa, tự vô hiệu hóa hoặc tự hạ quyền quản trị.
+- Chỉ hiển thị mục `Quản lý người dùng` trên navigation cho Admin.
+- Thêm loading skeleton, error state, empty state, toast và dialog xác nhận tùy biến; không dùng `alert()` hoặc `window.confirm()`.
+- Không trả `passwordHash` về API, page hoặc Client Component; mật khẩu tài khoản mới được hash BCrypt.
+
+### Route/API đã thêm
+
+- UI: `/admin/users`
+- `GET/POST /api/admin/users`
+- `PATCH/DELETE /api/admin/users/[id]`
+- `PATCH /api/admin/users/[id]/status`
+- `PATCH /api/admin/users/[id]/role`
+
+### Phân quyền và kiến trúc
+
+- Page kiểm tra session và redirect user không phải Admin về `/dashboard`.
+- Mỗi API gọi `requireSystemRole(["ADMIN"])`, trả `401` nếu chưa đăng nhập và `403` nếu không phải Admin.
+- Service `admin-service.ts` kiểm tra quyền thêm một lần tại business layer để tránh phụ thuộc riêng vào UI/API guard.
+- `DELETE` không xóa cứng mà chuyển tài khoản sang `INACTIVE` để bảo toàn dữ liệu liên quan và auditability.
+
+### Bug/rủi ro đã xử lý
+
+- Ngăn Admin tự làm mất quyền truy cập bằng cách tự khóa, tự vô hiệu hóa hoặc đổi vai trò của chính mình khỏi `ADMIN`.
+- Kiểm tra trùng email/username trước khi tạo hoặc cập nhật và vẫn xử lý lỗi unique race ở thao tác tạo.
+
+### File/khu vực liên quan
+
+- `src/lib/validators/admin-user.ts`
+- `src/features/users/admin-service.ts`
+- `src/app/api/admin/users/*`
+- `src/app/(dashboard)/admin/users/*`
+- `src/components/admin/user-management.tsx`
+- `src/components/layout/dashboard-header.tsx`
+- `tests/admin-user-service.test.ts`
+- `README.md`
+
+### Kiểm tra
+
+- Test service mới bao phủ: chặn non-admin, search/pagination, hash mật khẩu, không trả password hash, ngăn tự khóa và tự hạ quyền.
+- Tổng test sau thay đổi: 44/44 đạt trên 16 test files.
+
+---
+
+## Bổ sung sau Phase 8 — Hoàn thiện Notification Triggers
+
+### Mục tiêu
+
+- Tạo notification khi thêm thành viên dự án, cảnh báo bug sắp tới deadline và hỗ trợ target cả bug lẫn project.
+
+### Đã làm
+
+- Thêm `PROJECT_MEMBER_ADDED` và `BUG_DEADLINE_SOON` vào `NotificationType`.
+- Thêm `projectId` để notification liên kết tới project và `dedupeKey` unique để job deadline chạy lặp an toàn.
+- Khi thêm project member, tạo membership, activity log và notification trong cùng transaction; user đã là member vẫn bị chặn trước transaction.
+- Notification thêm member click mở `/projects/[projectId]`; notification bug click mở `/bugs/[bugId]`; notification cũ thiếu target vẫn render an toàn.
+- Deadline job lấy bug chưa kết thúc, chưa xóa và có `dueDate` trong 24 giờ tới; gửi cho reporter và assignee đang active, tự loại trùng recipient.
+- Thêm CLI `npm run notify:deadlines`, cron route `/api/cron/deadline-notifications` dùng Bearer `CRON_SECRET`, và lịch Vercel Cron mỗi ngày trong `vercel.json`.
+- Cập nhật seed với notification project mẫu và UI notification tiếng Việt.
+
+### Migration
+
+- Migration `20260717000000_notification_targets_and_deadlines` đã được áp dụng thành công lên Neon.
+- Seed idempotent đã chạy thành công sau migration.
+
+### Bug gặp phải và cách fix
+
+- Lần đầu chạy CLI thất bại vì deadline function nằm trong module có sentinel `server-only`; tách sang `deadline-service.ts` dùng riêng cho cron route và CLI, không import vào Client Component.
+- Các lệnh Neon trong sandbox trả lỗi kết nối/EACCES; chạy lại với quyền mạng được phê duyệt.
+
+### Kiểm tra deadline thực tế
+
+- Lần chạy đầu: `scanned=2`, `candidates=4`, `created=4`.
+- Chạy lại cùng dữ liệu: `scanned=2`, `candidates=4`, `created=0`, xác nhận chống trùng hoạt động trên Neon.
+
+### File/khu vực liên quan
+
+- `prisma/schema.prisma`
+- `prisma/migrations/20260717000000_notification_targets_and_deadlines/migration.sql`
+- `prisma/seed.ts`
+- `src/features/projects/service.ts`
+- `src/features/notifications/service.ts`
+- `src/features/notifications/deadline-service.ts`
+- `src/app/api/cron/deadline-notifications/route.ts`
+- `src/components/notifications/notification-list.tsx`
+- `src/components/notifications/notification-bell.tsx`
+- `scripts/notify-deadlines.ts`
+- `vercel.json`, `.env.example`, `package.json`
+- `tests/notification-service.test.ts`
+- `tests/project-member-notification.test.ts`
+- `tests/deadline-cron-route.test.ts`
+
+### Quality gates
+
+- Lint: đạt.
+- Type-check: đạt.
+- Test: 49/49 đạt trên 18 test files.
+- Production build: đạt và nhận diện `/api/cron/deadline-notifications`.
+
+---
+
+## Fix deployment Vercel — Thiếu generated Prisma Client
+
+### Lỗi gặp phải
+
+- Vercel build báo `Module not found: Can't resolve '@/generated/prisma/client'` tại `src/lib/prisma.ts`.
+
+### Nguyên nhân
+
+- `src/generated/prisma` được gitignore đúng chủ đích, nhưng pipeline cài đặt trên Vercel chưa chạy `prisma generate` trước `next build`.
+- Local build không tái hiện vì generated client đã tồn tại từ lần generate trước.
+
+### Cách fix
+
+- Thêm script `postinstall: prisma generate` để npm/Vercel tự tạo Prisma Client ngay sau khi cài dependency.
+- Cho `prisma.config.ts` dùng `DIRECT_URL`, hoặc fallback sang `DATABASE_URL` khi môi trường build không khai báo direct URL.
+- Vẫn giữ generated client ngoài Git để tránh commit code sinh tự động.
+
+### File liên quan
+
+- `package.json`
+- `prisma.config.ts`

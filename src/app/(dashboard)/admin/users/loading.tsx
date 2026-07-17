@@ -1,0 +1,1 @@
+export default function AdminUsersLoading() { return <div><div className="h-24 animate-pulse rounded-xl bg-slate-100" /><div className="mt-8 h-16 animate-pulse rounded-xl bg-slate-100" /><div className="mt-6 h-96 animate-pulse rounded-xl bg-slate-100" /></div>; }

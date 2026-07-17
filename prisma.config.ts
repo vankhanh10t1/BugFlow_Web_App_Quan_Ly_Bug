@@ -1,8 +1,10 @@
 import { loadEnvConfig } from "@next/env";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 import { normalizePostgresUrl } from "./src/lib/database-url";
 
 loadEnvConfig(process.cwd());
+const databaseUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DIRECT_URL or DATABASE_URL must be configured");
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -11,6 +13,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: normalizePostgresUrl(env("DIRECT_URL")),
+    url: normalizePostgresUrl(databaseUrl),
   },
 });

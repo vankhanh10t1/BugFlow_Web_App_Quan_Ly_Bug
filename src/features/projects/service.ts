@@ -100,6 +100,8 @@ export async function archiveProject(projectId: string, actor: ProjectActor) {
 
 export async function addProjectMember(projectId: string, actor: ProjectActor, userId: string, role: ProjectRole) {
   await assertProjectAccess(projectId, actor, true);
+  const project = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } });
+  if (!project) throw new AppError("RESOURCE_NOT_FOUND", "Project not found", 404);
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, accountStatus: true } });
   if (!user || user.accountStatus !== "ACTIVE") throw new AppError("RESOURCE_NOT_FOUND", "Active user not found", 404);
   const existing = await prisma.projectMember.findUnique({ where: { projectId_userId: { projectId, userId } }, select: { id: true } });
@@ -107,6 +109,7 @@ export async function addProjectMember(projectId: string, actor: ProjectActor, u
   return prisma.$transaction(async (tx) => {
     const member = await tx.projectMember.create({ data: { projectId, userId, role }, select: { id: true, role: true, user: { select: memberUserSelect } } });
     await tx.activityLog.create({ data: { projectId, actorId: actor.id, actionType: "MEMBER_ADDED", newValue: userId, description: `Added a project member as ${role}`, metadata: { userId, role } } });
+    await tx.notification.create({ data: { recipientId: userId, actorId: actor.id, projectId, type: "PROJECT_MEMBER_ADDED", title: "Bạn đã được thêm vào dự án", message: `Bạn đã được thêm vào dự án: ${project.name}` } });
     return member;
   });
 }

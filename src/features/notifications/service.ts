@@ -4,7 +4,7 @@ import { AppError } from "@/lib/errors";
 
 export async function listNotifications(userId: string, page = 1, pageSize = 20) {
   const [items, total, unreadCount] = await prisma.$transaction([
-    prisma.notification.findMany({ where: { recipientId: userId }, select: { id: true, type: true, title: true, message: true, isRead: true, readAt: true, createdAt: true, bug: { select: { id: true, bugCode: true } }, actor: { select: { id: true, fullName: true, avatarUrl: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.notification.findMany({ where: { recipientId: userId }, select: { id: true, type: true, title: true, message: true, isRead: true, readAt: true, createdAt: true, bug: { select: { id: true, bugCode: true } }, project: { select: { id: true, code: true, name: true } }, actor: { select: { id: true, fullName: true, avatarUrl: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
     prisma.notification.count({ where: { recipientId: userId } }),
     prisma.notification.count({ where: { recipientId: userId, isRead: false } }),
   ]);

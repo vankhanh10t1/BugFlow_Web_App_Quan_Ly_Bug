@@ -39,6 +39,7 @@ yarn-error.log*
 
 # local project specification
 /yêu cầu code.md
+/lệnh.md
 
 # vercel
 .vercel

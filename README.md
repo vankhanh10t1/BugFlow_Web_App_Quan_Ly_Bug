@@ -42,6 +42,7 @@ Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 - JWT session trong HTTP-only cookie; kiểm tra lại tài khoản active ở server.
 - System role và project role được kiểm tra tại service layer.
 - Cập nhật hồ sơ và đổi mật khẩu.
+- Admin quản lý người dùng toàn hệ thống: tìm kiếm, tạo/sửa tài khoản, đổi vai trò, khóa, mở khóa và vô hiệu hóa mềm.
 - Project CRUD, archive, search, filter và pagination.
 - Quản lý thành viên và project role.
 - Tạo, chỉnh sửa, tìm kiếm, lọc và xem chi tiết bug.
@@ -49,6 +50,7 @@ Xem tiến độ chi tiết tại [`nhat-ki-phases.md`](./nhat-ki-phases.md).
 - Assign, reassign, unassign và developer self-assignment.
 - Activity log và notification record cho các thao tác quan trọng.
 - Workflow theo vai trò, comments, mentions, activity timeline và notification polling.
+- Notification khi thêm thành viên dự án và job deadline chống trùng; click mở đúng bug hoặc project.
 - Dashboard tổng quan; dashboard project với biểu đồ status, priority, severity, assignee và xu hướng 30 ngày.
 - Upload/xóa attachment ảnh, video, log, text và PDF trên Cloudinary với preview ảnh.
 - Kanban theo project, filter, drag-and-drop, workflow validation, optimistic update và rollback.
@@ -159,6 +161,7 @@ System role và project role được đánh giá độc lập. Ẩn/hiện UI c
 /bugs/[bugId]
 /my-bugs
 /profile
+/admin/users
 ```
 
 #### API hiện có
@@ -166,6 +169,11 @@ System role và project role được đánh giá độc lập. Ẩn/hiện UI c
 ```text
 POST         /api/auth/register
 GET          /api/users/me
+
+GET/POST     /api/admin/users
+PATCH/DELETE /api/admin/users/[id]
+PATCH        /api/admin/users/[id]/status
+PATCH        /api/admin/users/[id]/role
 
 GET/POST     /api/projects
 GET/PATCH    /api/projects/[projectId]
@@ -204,6 +212,7 @@ npm install
 npm run db:generate
 npm run db:deploy
 npm run db:seed
+npm run notify:deadlines
 npm run dev
 ```
 
@@ -323,6 +332,7 @@ See [`nhat-ki-phases.md`](./nhat-ki-phases.md) for the detailed progress log.
 - Assignment, reassignment, unassignment, and developer self-assignment.
 - Activity and notification records for critical operations.
 - Role-aware workflows, comments, mentions, an activity timeline, and notification polling.
+- Project-member and idempotent deadline notifications with bug/project targets.
 - Global overview and project dashboards with status, priority, severity, assignee, and 30-day trend charts.
 - Cloudinary upload/deletion for images, videos, logs, text, and PDF files with image previews.
 - Project Kanban filtering, drag-and-drop, server workflow validation, optimistic updates, and rollback.
@@ -433,6 +443,7 @@ System roles and project roles are evaluated independently. UI visibility is onl
 /bugs/[bugId]
 /my-bugs
 /profile
+/admin/users
 ```
 
 #### Current API
@@ -440,6 +451,11 @@ System roles and project roles are evaluated independently. UI visibility is onl
 ```text
 POST         /api/auth/register
 GET          /api/users/me
+
+GET/POST     /api/admin/users
+PATCH/DELETE /api/admin/users/[id]
+PATCH        /api/admin/users/[id]/status
+PATCH        /api/admin/users/[id]/role
 
 GET/POST     /api/projects
 GET/PATCH    /api/projects/[projectId]
@@ -478,6 +494,7 @@ npm install
 npm run db:generate
 npm run db:deploy
 npm run db:seed
+npm run notify:deadlines
 npm run dev
 ```
 

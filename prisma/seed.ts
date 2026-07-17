@@ -86,6 +86,7 @@ async function main() {
   await prisma.notification.upsert({ where: { id: "seed-notification-1" }, update: {}, create: { id: "seed-notification-1", recipientId: developer1Id, actorId: managerId, bugId: firstBugId, type: NotificationType.BUG_ASSIGNED, title: "Bug assigned", message: "A demo bug was assigned to you." } });
   await prisma.notification.upsert({ where: { id: "seed-notification-2" }, update: {}, create: { id: "seed-notification-2", recipientId: testerId, actorId: developer1Id, bugId: firstBugId, type: NotificationType.COMMENT_ADDED, title: "New comment", message: "A developer commented on a bug you reported." } });
   await prisma.notification.upsert({ where: { id: "seed-notification-3" }, update: {}, create: { id: "seed-notification-3", recipientId: managerId, actorId: testerId, bugId: firstBugId, type: NotificationType.BUG_UPDATED, title: "Bug updated", message: "A demo bug was updated." } });
+  await prisma.notification.upsert({ where: { id: "seed-notification-4" }, update: { projectId: projects[0].id, type: NotificationType.PROJECT_MEMBER_ADDED }, create: { id: "seed-notification-4", recipientId: developer2Id, actorId: managerId, projectId: projects[0].id, type: NotificationType.PROJECT_MEMBER_ADDED, title: "Bạn đã được thêm vào dự án", message: `Bạn đã được thêm vào dự án: ${projects[0].name}` } });
 }
 
 main().finally(async () => prisma.$disconnect());
