@@ -25,6 +25,7 @@ export async function verifyTwoFactorLoginAction(method: "totp" | "recovery", _:
     cookieStore.delete("bugflow_2fa_challenge");
   } catch (error) {
     if (error instanceof AuthError) return { success: false, message: "Mã xác thực không đúng, challenge đã hết hạn hoặc đã bị khóa" };
+    console.error("[login-2fa] failed", { step: "verification", error: error instanceof Error ? error.message : String(error) });
     return failure(error, "Không thể xác thực two-factor authentication");
   }
   redirect("/dashboard");

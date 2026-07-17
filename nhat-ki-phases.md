@@ -1027,3 +1027,43 @@
 - Gọi trực tiếp Credentials Provider chỉ với email/password phải thất bại.
 - Khi chưa xác minh challenge, truy cập route protected vẫn bị đưa về login vì chưa tồn tại Auth.js session.
 - Production cần `AUTH_SECRET`, `TWO_FACTOR_ENCRYPTION_KEY`, TTL/max attempts; không cấu hình `AUTH_URL` localhost và phải redeploy sau khi đổi env.
+
+---
+
+## Fix sau khi bắt buộc 2FA — Lỗi 500 sau bước mật khẩu
+
+### Lỗi gặp phải
+
+- Sau khi nhập đúng email/password trên production, Server Action có thể ném exception trong lúc tạo pending challenge hoặc mã hóa secret TOTP, khiến UI hiển thị lỗi Server Components 500 thay vì chuyển sang bước 2FA.
+
+### Nguyên nhân
+
+- Nhánh `verifyPasswordLogin` và `createLoginChallenge` chưa có error boundary ở Server Action.
+- Các lỗi như thiếu/sai `TWO_FACTOR_ENCRYPTION_KEY`, migration 2FA chưa deploy hoặc database tạm thời không kết nối được thoát thẳng ra production render.
+- Việc chuyển trang dùng exception redirect của server khiến frontend không nhận được trạng thái nghiệp vụ `REQUIRE_2FA` rõ ràng.
+
+### Cách fix
+
+- Login Action bắt lỗi riêng theo bước `password` và `challenge`, trả `ERROR` với thông báo tiếng Việt thay vì throw.
+- Khi challenge đã tạo thành công, action trả `REQUIRE_2FA`, message và route setup/verify; token thật vẫn chỉ nằm trong cookie HttpOnly, không expose cho Client Component.
+- Login form nhận trạng thái, hiển thị loading/message và dùng router chuyển sang trang 2FA.
+- Trang setup bắt lỗi giải mã/tải QR, ghi log an toàn rồi quay lại login với thông báo thân thiện thay vì làm Server Component crash.
+- Verify action thêm server log ngắn gọn cho lỗi bất ngờ. Log không chứa email, password, token, TOTP hoặc secret.
+
+### File đã sửa
+
+- `src/features/auth/actions.ts`
+- `src/features/auth/two-factor-actions.ts`
+- `src/components/auth/login-form.tsx`
+- `src/app/(auth)/login/page.tsx`
+- `src/app/(auth)/login/setup-2fa/page.tsx`
+- `README.md`
+- `nhat-ki-phases.md`
+
+### Env và cách test production
+
+1. Vercel phải có `AUTH_SECRET`, `DATABASE_URL` và `TWO_FACTOR_ENCRYPTION_KEY` base64 đúng 32 byte; không dùng localhost cho `AUTH_URL`/`NEXTAUTH_URL`.
+2. Chạy `npm run db:deploy` để chắc chắn migration `20260717010000_two_factor_authentication` đã có trên production database, sau đó redeploy.
+3. User chưa enroll phải nhận trạng thái `REQUIRE_2FA` và tới `/login/setup-2fa`; user đã enroll tới `/login/verify-2fa`.
+4. Mã sai/hết hạn hiển thị lỗi; chỉ mã hợp lệ mới tạo session và tới `/dashboard`.
+5. Khi cố ý cấu hình sai encryption key ở môi trường kiểm thử, login form phải báo không thể khởi tạo 2FA và server log có `[login-2fa] failed`, không xuất hiện dữ liệu nhạy cảm.

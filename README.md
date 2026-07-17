@@ -628,3 +628,19 @@ Production/Preview redirects are performed with application-relative paths after
 Không còn nút hoặc Server Action để người dùng tắt 2FA. Credentials Provider cũng từ chối request chỉ chứa email/password, ngăn bỏ qua bước thứ hai qua API. Với tài khoản seed/demo, mã không được log hoặc gửi qua email: trong lần đăng nhập đầu tiên, quét QR bằng ứng dụng Authenticator và dùng mã 6 chữ số do ứng dụng tạo.
 
 Mandatory 2FA supersedes the earlier opt-in behavior. Password verification only creates an expiring HttpOnly challenge. Unenrolled accounts must scan the QR at `/login/setup-2fa`; enrolled accounts verify at `/login/verify-2fa`. Auth.js issues a full session only after successful second-factor verification, and there is no user-facing disable action.
+
+### Xử lý lỗi pending 2FA trên production
+
+Login Server Action trả trạng thái ổn định `REQUIRE_2FA` cùng route tiếp theo; pending token không được đưa vào JSON/Client Component mà nằm trong cookie HttpOnly để giảm nguy cơ bị đọc bởi JavaScript. Frontend hiển thị trạng thái đang chuyển và dùng router để mở trang setup/verify. Lỗi database, migration hoặc cấu hình mã hóa được bắt theo từng bước và trả thông báo thân thiện thay vì làm Server Component trả trang 500.
+
+Log production dùng nhãn `[login-2fa] failed` và chỉ gồm tên bước, user ID nếu đã xác định được, cùng error message; tuyệt đối không ghi password, pending token, TOTP hoặc encryption secret.
+
+Nếu Vercel vẫn báo không thể khởi tạo 2FA, kiểm tra và redeploy sau khi cấu hình:
+
+- `AUTH_SECRET`
+- `DATABASE_URL`
+- `TWO_FACTOR_ENCRYPTION_KEY` — base64 đúng 32 byte
+- Migration `20260717010000_two_factor_authentication` đã được chạy bằng `npm run db:deploy`
+- Không đặt `AUTH_URL`/`NEXTAUTH_URL` thành localhost trong Production/Preview
+
+The pending-2FA login action now returns a stable `REQUIRE_2FA` state while retaining the sensitive challenge token in an HttpOnly cookie. Database, migration, and encryption-configuration failures are logged safely and rendered as friendly form errors instead of uncaught Server Component failures.
