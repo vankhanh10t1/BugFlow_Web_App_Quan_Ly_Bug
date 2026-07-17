@@ -2,9 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import type { SystemRole } from "@/generated/prisma/client";
 import { authConfig } from "@/auth.config";
-import { authenticateUser } from "@/features/auth/service";
 import { verifyTwoFactorLogin } from "@/features/auth/two-factor-service";
-import { loginSchema } from "@/lib/validators/auth";
 import { twoFactorCredentialsSchema } from "@/lib/validators/two-factor";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
@@ -15,9 +13,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         const twoFactor = twoFactorCredentialsSchema.safeParse(credentials);
         if (twoFactor.success) return verifyTwoFactorLogin(twoFactor.data.challengeToken, twoFactor.data.verification, twoFactor.data.method);
-        const parsed = loginSchema.safeParse(credentials);
-        if (!parsed.success) return null;
-        return authenticateUser(parsed.data.email, parsed.data.password);
+        return null;
       },
     }),
   ],
@@ -27,6 +23,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id;
         token.systemRole = user.systemRole as SystemRole;
+        token.twoFactorVerified = true;
       }
       return token;
     },
@@ -34,6 +31,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.systemRole = token.systemRole as SystemRole;
+        session.user.twoFactorVerified = token.twoFactorVerified === true;
       }
       return session;
     },

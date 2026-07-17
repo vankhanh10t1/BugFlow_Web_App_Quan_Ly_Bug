@@ -979,3 +979,51 @@
 3. Mở **Bảo mật**, bật 2FA bằng QR và lưu recovery code.
 4. Đăng xuất, đăng nhập lại: phải tới `/login/verify-2fa`, mã sai hiển thị lỗi, mã đúng tới `/dashboard` trên cùng domain.
 5. Đăng xuất lần nữa và kiểm tra một recovery code hợp lệ; code đó không thể sử dụng lại.
+
+---
+
+## Thay đổi chính sách sau Phase 4 — Bắt buộc 2FA cho mọi đăng nhập
+
+### Mục tiêu
+
+- Không tài khoản nào được truy cập ứng dụng chỉ bằng email và mật khẩu.
+- Tài khoản chưa đăng ký Authenticator phải thiết lập TOTP ngay trong lần đăng nhập tiếp theo.
+
+### Flow đăng nhập mới
+
+1. Server kiểm tra email/mật khẩu nhưng chưa gọi Auth.js để tạo session.
+2. Server luôn tạo login challenge ngẫu nhiên, lưu hash trong database và token trong cookie HttpOnly có hạn.
+3. Nếu chưa có TOTP, người dùng tới `/login/setup-2fa`, quét QR và nhập mã 6 chữ số đầu tiên; nếu đã có TOTP, người dùng tới `/login/verify-2fa`.
+4. Mã sai làm tăng bộ đếm retry và không tạo session; challenge hết hạn/đã dùng bị từ chối.
+5. Mã hợp lệ tiêu thụ challenge trong transaction, hoàn tất enrollment nếu cần, sau đó Auth.js mới tạo session.
+6. Next.js redirect tương đối tới `/dashboard`, không phụ thuộc URL localhost.
+
+### Chống bypass và thay đổi UI
+
+- Credentials Provider chỉ chấp nhận bộ credentials có challenge token và yếu tố thứ hai; request chỉ có email/password luôn bị từ chối.
+- JWT/session mang cờ `twoFactorVerified`; middleware và server DAL chỉ xem session có cờ này là đã xác thực đầy đủ. Session cũ được tạo trước chính sách bắt buộc sẽ không vượt qua route/service guard.
+- Registration không tự đăng nhập nữa mà chuyển về `/login` để đi qua flow 2FA bắt buộc.
+- Gỡ chức năng tắt 2FA khỏi UI và Server Action; trang bảo mật nêu rõ chính sách bắt buộc.
+- Tài khoản chưa enroll nhận QR ngay trong pending-login flow, không cần session tạm và không log secret/mã TOTP.
+
+### File chính đã sửa
+
+- `src/auth.ts`
+- `src/auth.config.ts`, `src/types/next-auth.d.ts`, `src/lib/auth.ts`
+- `src/features/auth/actions.ts`
+- `src/features/auth/service.ts`
+- `src/features/auth/two-factor-service.ts`
+- `src/features/auth/two-factor-actions.ts`
+- `src/app/(auth)/login/setup-2fa/page.tsx`
+- `src/app/(auth)/login/verify-2fa/page.tsx`
+- `src/components/auth/two-factor-settings.tsx`
+- `tests/two-factor-service.test.ts`
+- `README.md`, `nhat-ki-phases.md`
+
+### Cách test
+
+- Seed/demo chưa enroll: nhập đúng password phải tới `/login/setup-2fa`; quét QR và nhập mã đúng mới tới dashboard.
+- User đã enroll: nhập đúng password phải tới `/login/verify-2fa`; mã sai/hết hạn không tạo session.
+- Gọi trực tiếp Credentials Provider chỉ với email/password phải thất bại.
+- Khi chưa xác minh challenge, truy cập route protected vẫn bị đưa về login vì chưa tồn tại Auth.js session.
+- Production cần `AUTH_SECRET`, `TWO_FACTOR_ENCRYPTION_KEY`, TTL/max attempts; không cấu hình `AUTH_URL` localhost và phải redeploy sau khi đổi env.

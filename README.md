@@ -615,3 +615,16 @@ TWO_FACTOR_MAX_ATTEMPTS="5"
 Để kiểm tra bằng tài khoản demo, đăng nhập tài khoản seed, mở mục **Bảo mật** trên thanh điều hướng, bật 2FA và lưu recovery code. Đăng xuất rồi đăng nhập lại: sau bước email/mật khẩu, ứng dụng phải mở `/login/verify-2fa`; chỉ mã TOTP hoặc recovery code hợp lệ mới tạo session và chuyển tới `/dashboard` trên cùng domain.
 
 Production/Preview redirects are performed with application-relative paths after Auth.js has created or removed the session. Do not configure a localhost `AUTH_URL`/`NEXTAUTH_URL` in Vercel. Remove those variables so Auth.js uses the current Vercel request host, or set `AUTH_URL` to the canonical HTTPS domain, then redeploy. Enable 2FA for a seed account from the **Bảo mật** navigation item before testing the two-step sign-in flow.
+
+### Chính sách mới: 2FA bắt buộc
+
+2FA hiện là điều kiện bắt buộc cho mọi tài khoản, thay thế chính sách opt-in mô tả phía trên:
+
+1. Email/mật khẩu đúng chỉ tạo login challenge HttpOnly có thời hạn, chưa tạo session.
+2. Tài khoản chưa cấu hình TOTP được chuyển tới `/login/setup-2fa` để quét QR và nhập mã đầu tiên.
+3. Tài khoản đã cấu hình được chuyển tới `/login/verify-2fa`.
+4. Chỉ sau khi TOTP hoặc recovery code hợp lệ, Auth.js mới cấp session và ứng dụng redirect tương đối tới `/dashboard`.
+
+Không còn nút hoặc Server Action để người dùng tắt 2FA. Credentials Provider cũng từ chối request chỉ chứa email/password, ngăn bỏ qua bước thứ hai qua API. Với tài khoản seed/demo, mã không được log hoặc gửi qua email: trong lần đăng nhập đầu tiên, quét QR bằng ứng dụng Authenticator và dùng mã 6 chữ số do ứng dụng tạo.
+
+Mandatory 2FA supersedes the earlier opt-in behavior. Password verification only creates an expiring HttpOnly challenge. Unenrolled accounts must scan the QR at `/login/setup-2fa`; enrolled accounts verify at `/login/verify-2fa`. Auth.js issues a full session only after successful second-factor verification, and there is no user-facing disable action.

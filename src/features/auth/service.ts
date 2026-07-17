@@ -37,7 +37,7 @@ export async function verifyPasswordLogin(email: string, password: string) {
     await prisma.activityLog.create({ data: { projectId: null, actorId: user.id, actionType: "LOGIN_FAILED", description: "Password sign-in failed" } });
     return null;
   }
-  return { id: user.id, twoFactorRequired: user.twoFactorEnabled };
+  return { id: user.id };
 }
 
 export async function registerUser(input: RegisterInput) {

@@ -8,8 +8,8 @@ import { signIn } from "@/auth";
 import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
-import { beginTwoFactorSetup, confirmTwoFactorSetup, disableTwoFactor, regenerateRecoveryCodes } from "@/features/auth/two-factor-service";
-import { confirmTwoFactorSchema, disableTwoFactorSchema, regenerateRecoveryCodesSchema, setupTwoFactorSchema, twoFactorCredentialsSchema } from "@/lib/validators/two-factor";
+import { beginTwoFactorSetup, confirmTwoFactorSetup, regenerateRecoveryCodes } from "@/features/auth/two-factor-service";
+import { confirmTwoFactorSchema, regenerateRecoveryCodesSchema, setupTwoFactorSchema, twoFactorCredentialsSchema } from "@/lib/validators/two-factor";
 
 export type TwoFactorActionState = { success: boolean; message: string; qrCodeDataUrl?: string; recoveryCodes?: string[]; fieldErrors?: Record<string, string[]> } | undefined;
 const failure = (error: unknown, fallback: string): TwoFactorActionState => ({ success: false, message: error instanceof AppError ? error.message : fallback });
@@ -46,14 +46,6 @@ export async function confirmTwoFactorSetupAction(_: TwoFactorActionState, formD
   if (!input.success) return { success: false, message: input.error.issues[0]?.message ?? "Mã xác thực không hợp lệ" };
   try { const result = await confirmTwoFactorSetup(user.id, input.data.code); revalidatePath("/settings/security"); return { success: true, message: "Đã bật two-factor authentication", recoveryCodes: result.recoveryCodes }; }
   catch (error) { return failure(error, "Không thể xác nhận 2FA"); }
-}
-
-export async function disableTwoFactorAction(_: TwoFactorActionState, formData: FormData): Promise<TwoFactorActionState> {
-  const user = await requireActiveUser();
-  const input = disableTwoFactorSchema.safeParse(Object.fromEntries(formData));
-  if (!input.success) return { success: false, message: input.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" };
-  try { await disableTwoFactor(user.id, input.data.password, input.data.verification, input.data.method); revalidatePath("/settings/security"); return { success: true, message: "Đã tắt two-factor authentication" }; }
-  catch (error) { return failure(error, "Không thể tắt 2FA"); }
 }
 
 export async function regenerateRecoveryCodesAction(_: TwoFactorActionState, formData: FormData): Promise<TwoFactorActionState> {

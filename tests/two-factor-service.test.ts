@@ -15,7 +15,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
 } }));
 
 import { encryptSecret } from "@/lib/encryption";
-import { confirmTwoFactorSetup, getTwoFactorStatus, verifyTwoFactorLogin } from "@/features/auth/two-factor-service";
+import { confirmTwoFactorSetup, createLoginChallenge, getTwoFactorStatus, verifyTwoFactorLogin } from "@/features/auth/two-factor-service";
 
 const secret = new OTPAuth.Secret({ size: 20 }).base32;
 const generator = new OTPAuth.TOTP({ issuer: "BugFlow", label: "user@example.com", secret: OTPAuth.Secret.fromBase32(secret), digits: 6, period: 30 });
@@ -39,6 +39,14 @@ describe("two-factor service", () => {
     const status = await getTwoFactorStatus("user-1");
     expect(status).not.toHaveProperty("twoFactorSecretEncrypted");
     expect(mocks.userFindUnique).toHaveBeenCalledWith(expect.objectContaining({ select: expect.not.objectContaining({ twoFactorSecretEncrypted: true }) }));
+  });
+
+  it("creates a mandatory setup challenge for an account without 2FA", async () => {
+    mocks.userFindUnique.mockResolvedValue({ twoFactorEnabled: false });
+    const challenge = await createLoginChallenge("user-1");
+    expect(challenge.requiresSetup).toBe(true);
+    expect(mocks.statusUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ twoFactorEnabled: false, twoFactorSecretEncrypted: expect.any(String) }) }));
+    expect(mocks.challengeCreate).toHaveBeenCalled();
   });
 
   it("does not enable 2FA when the confirmation TOTP is wrong", async () => {
@@ -82,6 +90,14 @@ describe("two-factor service", () => {
     expect(mocks.challengeUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ usedAt: null }), data: { usedAt: expect.any(Date) } }));
     expect(user).toEqual({ id: "user-1", email: "user@example.com", name: "Test User", image: null, systemRole: "TESTER" });
     expect(user).not.toHaveProperty("twoFactorSecretEncrypted");
+  });
+
+  it("enrolls an account during mandatory first-login verification", async () => {
+    mocks.challengeFindUnique.mockResolvedValue({ id: "challenge-1", userId: "user-1", expiresAt: new Date(Date.now() + 60_000), usedAt: null, failedAttempts: 0, user: { ...baseUser, twoFactorEnabled: false, twoFactorSecretEncrypted: encryptSecret(secret) } });
+    const user = await verifyTwoFactorLogin("x".repeat(40), generator.generate(), "totp");
+    expect(user?.id).toBe("user-1");
+    expect(mocks.recoveryCreateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.arrayContaining([expect.objectContaining({ codeHash: expect.any(String) })]) }));
+    expect(mocks.statusUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ twoFactorEnabled: true, twoFactorEnabledAt: expect.any(Date) }) }));
   });
 
   it("marks a recovery code used in the same successful login transaction", async () => {

@@ -5,7 +5,7 @@ export const authConfig = {
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
   callbacks: {
     authorized({ auth, request }) {
-      const isAuthenticated = Boolean(auth?.user);
+      const isAuthenticated = Boolean(auth?.user?.twoFactorVerified);
       const pathname = request.nextUrl.pathname;
       const isAuthPage = pathname.startsWith("/login") || pathname === "/register";
       const isPublicPage = pathname === "/" || pathname === "/docs";

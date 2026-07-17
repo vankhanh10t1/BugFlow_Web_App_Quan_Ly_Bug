@@ -67,22 +67,35 @@ export async function createLoginChallenge(userId: string) {
   const rawToken = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + challengeTtlMinutes() * 60_000);
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { twoFactorEnabled: true } });
+  if (!user) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy người dùng", 404);
+  const requiresSetup = !user.twoFactorEnabled;
+  const setupSecret = requiresSetup ? new OTPAuth.Secret({ size: 20 }).base32 : null;
   await prisma.$transaction(async (tx) => {
     await tx.twoFactorLoginChallenge.deleteMany({ where: { OR: [{ expiresAt: { lte: now } }, { usedAt: { not: null } }, { failedAttempts: { gte: maxAttempts() } }] } });
+    if (setupSecret) await tx.user.update({ where: { id: userId }, data: { twoFactorSecretEncrypted: encryptSecret(setupSecret), twoFactorEnabled: false, twoFactorEnabledAt: null } });
     await tx.twoFactorLoginChallenge.create({ data: { userId, tokenHash: sha256(rawToken), expiresAt } });
   });
-  return { token: rawToken, expiresAt };
+  return { token: rawToken, expiresAt, requiresSetup };
+}
+
+export async function getPendingLoginSetup(challengeToken: string) {
+  const now = new Date();
+  const challenge = await prisma.twoFactorLoginChallenge.findUnique({ where: { tokenHash: sha256(challengeToken) }, select: { expiresAt: true, usedAt: true, failedAttempts: true, user: { select: { email: true, accountStatus: true, twoFactorEnabled: true, twoFactorSecretEncrypted: true } } } });
+  if (!challenge || challenge.usedAt || challenge.expiresAt <= now || challenge.failedAttempts >= maxAttempts() || challenge.user.accountStatus !== "ACTIVE" || challenge.user.twoFactorEnabled || !challenge.user.twoFactorSecretEncrypted) return null;
+  const uri = totp(decryptSecret(challenge.user.twoFactorSecretEncrypted), challenge.user.email).toString();
+  return { qrCodeDataUrl: await QRCode.toDataURL(uri, { width: 280, margin: 1, errorCorrectionLevel: "M" }) };
 }
 
 export async function verifyTwoFactorLogin(challengeToken: string, verification: string, method: "totp" | "recovery") {
   const now = new Date();
   const challenge = await prisma.twoFactorLoginChallenge.findUnique({ where: { tokenHash: sha256(challengeToken) }, select: { id: true, userId: true, expiresAt: true, usedAt: true, failedAttempts: true, user: { select: { ...authUserSelect, twoFactorEnabled: true, twoFactorSecretEncrypted: true } } } });
-  if (!challenge || challenge.usedAt || challenge.expiresAt <= now || challenge.failedAttempts >= maxAttempts() || challenge.user.accountStatus !== "ACTIVE" || !challenge.user.twoFactorEnabled || !challenge.user.twoFactorSecretEncrypted) return null;
+  if (!challenge || challenge.usedAt || challenge.expiresAt <= now || challenge.failedAttempts >= maxAttempts() || challenge.user.accountStatus !== "ACTIVE" || !challenge.user.twoFactorSecretEncrypted) return null;
 
   let recoveryId: string | null = null;
   let valid = false;
   if (method === "totp") valid = validTotp(decryptSecret(challenge.user.twoFactorSecretEncrypted), challenge.user.email, verification);
-  else {
+  else if (challenge.user.twoFactorEnabled) {
     const hash = recoveryCodeHash(verification);
     const recovery = await prisma.twoFactorRecoveryCode.findFirst({ where: { userId: challenge.userId, codeHash: hash, usedAt: null }, select: { id: true } });
     recoveryId = recovery?.id ?? null;
@@ -103,7 +116,13 @@ export async function verifyTwoFactorLogin(challengeToken: string, verification:
       if (recovery.count !== 1) throw new AppError("VALIDATION_ERROR", "Mã khôi phục đã được sử dụng", 400);
       await tx.activityLog.create({ data: { projectId: null, actorId: challenge.userId, actionType: "TWO_FACTOR_RECOVERY_CODE_USED", description: "Used a two-factor recovery code" } });
     }
-    await tx.user.update({ where: { id: challenge.userId }, data: { lastLoginAt: now } });
+    if (!challenge.user.twoFactorEnabled) {
+      const codes = generateRecoveryCodes();
+      await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: challenge.userId } });
+      await tx.twoFactorRecoveryCode.createMany({ data: codes.map((value) => ({ userId: challenge.userId, codeHash: recoveryCodeHash(value) })) });
+      await tx.activityLog.create({ data: { projectId: null, actorId: challenge.userId, actionType: "TWO_FACTOR_ENABLED", description: "Enrolled in mandatory two-factor authentication during sign-in" } });
+    }
+    await tx.user.update({ where: { id: challenge.userId }, data: { lastLoginAt: now, ...(!challenge.user.twoFactorEnabled ? { twoFactorEnabled: true, twoFactorEnabledAt: now } : {}) } });
     await tx.activityLog.create({ data: { projectId: null, actorId: challenge.userId, actionType: "LOGIN_SUCCEEDED", description: "Signed in with two-factor authentication" } });
     return true;
   });

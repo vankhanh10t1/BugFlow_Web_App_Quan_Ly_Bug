@@ -8,7 +8,7 @@ import { AppError } from "@/lib/errors";
 
 export const getCurrentUser = cache(async () => {
   const session = await auth();
-  if (!session?.user?.id) return null;
+  if (!session?.user?.id || session.user.twoFactorVerified !== true) return null;
   const user = await getSafeUserById(session.user.id);
   return user?.accountStatus === "ACTIVE" ? user : null;
 });

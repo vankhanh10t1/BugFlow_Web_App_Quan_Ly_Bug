@@ -1,9 +1,8 @@
 "use server";
 
-import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { signIn, signOut } from "@/auth";
+import { signOut } from "@/auth";
 import { registerUser, verifyPasswordLogin } from "@/features/auth/service";
 import { createLoginChallenge } from "@/features/auth/two-factor-service";
 import { AppError } from "@/lib/errors";
@@ -20,19 +19,9 @@ export async function loginAction(_: AuthActionState, formData: FormData): Promi
   catch (error) { return { success: false, message: error instanceof AppError ? error.message : "Bạn đã thử quá nhiều lần" }; }
   const passwordLogin = await verifyPasswordLogin(parsed.data.email, parsed.data.password);
   if (!passwordLogin) return { success: false, message: "Email hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa" };
-  if (passwordLogin.twoFactorRequired) {
-    const challenge = await createLoginChallenge(passwordLogin.id);
-    (await cookies()).set("bugflow_2fa_challenge", challenge.token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: challenge.expiresAt, priority: "high" });
-    redirect("/login/verify-2fa");
-  }
-
-  try {
-    await signIn("credentials", { ...parsed.data, redirect: false });
-  } catch (error) {
-    if (error instanceof AuthError) return { success: false, message: "Email hoặc mật khẩu không đúng, hoặc tài khoản đã bị khóa" };
-    throw error;
-  }
-  redirect("/dashboard");
+  const challenge = await createLoginChallenge(passwordLogin.id);
+  (await cookies()).set("bugflow_2fa_challenge", challenge.token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: challenge.expiresAt, priority: "high" });
+  redirect(challenge.requiresSetup ? "/login/setup-2fa" : "/login/verify-2fa");
 }
 
 export async function registerAction(_: AuthActionState, formData: FormData): Promise<AuthActionState> {
@@ -46,13 +35,7 @@ export async function registerAction(_: AuthActionState, formData: FormData): Pr
     return { success: false, message: "Unable to create your account" };
   }
 
-  try {
-    await signIn("credentials", { email: parsed.data.email, password: parsed.data.password, redirect: false });
-  } catch (error) {
-    if (error instanceof AuthError) redirect("/login");
-    throw error;
-  }
-  redirect("/dashboard");
+  redirect("/login?registered=1");
 }
 
 export async function logoutAction() {
