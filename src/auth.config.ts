@@ -7,7 +7,7 @@ export const authConfig = {
     authorized({ auth, request }) {
       const isAuthenticated = Boolean(auth?.user);
       const pathname = request.nextUrl.pathname;
-      const isAuthPage = pathname === "/login" || pathname === "/register";
+      const isAuthPage = pathname.startsWith("/login") || pathname === "/register";
       const isPublicPage = pathname === "/" || pathname === "/docs";
 
       if (isAuthPage && isAuthenticated) return Response.redirect(new URL("/dashboard", request.nextUrl));

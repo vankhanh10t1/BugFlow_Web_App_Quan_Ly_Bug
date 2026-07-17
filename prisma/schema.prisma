@@ -76,6 +76,14 @@ enum ActivityType {
   MEMBER_ADDED
   MEMBER_REMOVED
   PROJECT_UPDATED
+  TWO_FACTOR_ENABLED
+  TWO_FACTOR_DISABLED
+  TWO_FACTOR_RECOVERY_CODES_REGENERATED
+  TWO_FACTOR_RESET_BY_ADMIN
+  LOGIN_SUCCEEDED
+  LOGIN_FAILED
+  TWO_FACTOR_VERIFICATION_FAILED
+  TWO_FACTOR_RECOVERY_CODE_USED
 }
 
 enum NotificationType {
@@ -108,6 +116,9 @@ model User {
   systemRole           SystemRole      @default(TESTER)
   accountStatus        AccountStatus   @default(ACTIVE)
   lastLoginAt          DateTime?
+  twoFactorEnabled     Boolean         @default(false)
+  twoFactorSecretEncrypted String?
+  twoFactorEnabledAt   DateTime?
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
   projectsCreated      Project[]       @relation("ProjectCreator")
@@ -122,6 +133,8 @@ model User {
   notificationsCreated Notification[]  @relation("NotificationActor")
   accounts             Account[]
   sessions             Session[]
+  twoFactorRecoveryCodes TwoFactorRecoveryCode[]
+  twoFactorLoginChallenges TwoFactorLoginChallenge[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -253,7 +266,7 @@ model Attachment {
 
 model ActivityLog {
   id          String       @id @default(cuid())
-  projectId   String
+  projectId   String?
   bugId       String?
   actorId     String
   actionType  ActivityType
@@ -263,7 +276,7 @@ model ActivityLog {
   description String
   metadata    Json?
   createdAt   DateTime     @default(now())
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   bug         Bug?         @relation(fields: [bugId], references: [id], onDelete: Cascade)
   actor       User         @relation(fields: [actorId], references: [id], onDelete: Restrict)
 
@@ -271,6 +284,31 @@ model ActivityLog {
   @@index([bugId, createdAt])
   @@index([actorId])
   @@index([actionType])
+}
+
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, usedAt])
+}
+
+model TwoFactorLoginChallenge {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  failedAttempts Int       @default(0)
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, usedAt])
 }
 
 model Notification {

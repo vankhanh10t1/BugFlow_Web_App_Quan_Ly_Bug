@@ -13,16 +13,31 @@ export const safeUserSelect = {
   systemRole: true,
   accountStatus: true,
   lastLoginAt: true,
+  twoFactorEnabled: true,
+  twoFactorEnabledAt: true,
   createdAt: true,
   updatedAt: true,
 } as const;
 
 export async function authenticateUser(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user || user.accountStatus !== "ACTIVE" || !(await compare(password, user.passwordHash))) return null;
+  if (!user || user.accountStatus !== "ACTIVE" || user.twoFactorEnabled || !(await compare(password, user.passwordHash))) return null;
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    await tx.activityLog.create({ data: { projectId: null, actorId: user.id, actionType: "LOGIN_SUCCEEDED", description: "Signed in with password" } });
+  });
   return { id: user.id, email: user.email, name: user.fullName, image: user.avatarUrl, systemRole: user.systemRole };
+}
+
+export async function verifyPasswordLogin(email: string, password: string) {
+  const user = await prisma.user.findUnique({ where: { email }, select: { id: true, passwordHash: true, accountStatus: true, twoFactorEnabled: true } });
+  if (!user) return null;
+  if (user.accountStatus !== "ACTIVE" || !(await compare(password, user.passwordHash))) {
+    await prisma.activityLog.create({ data: { projectId: null, actorId: user.id, actionType: "LOGIN_FAILED", description: "Password sign-in failed" } });
+    return null;
+  }
+  return { id: user.id, twoFactorRequired: user.twoFactorEnabled };
 }
 
 export async function registerUser(input: RegisterInput) {

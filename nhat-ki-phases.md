@@ -879,3 +879,65 @@
 
 - `package.json`
 - `prisma.config.ts`
+
+---
+
+## Phase 4 mới — Xác thực hai lớp (2FA)
+
+### Mục tiêu
+
+- Bổ sung TOTP 2FA theo chuẩn ứng dụng Authenticator mà không phá luồng đăng nhập email/mật khẩu hiện có.
+- Không tạo session cho tài khoản bật 2FA cho tới khi người dùng xác minh yếu tố thứ hai thành công.
+
+### Đã làm
+
+- Thêm trang quản lý bảo mật `/settings/security` và trang thiết lập `/settings/security/2fa/setup`.
+- Luồng bật 2FA yêu cầu nhập lại mật khẩu, tạo QR TOTP, xác nhận mã 6 chữ số và sinh 10 recovery code hiển thị một lần.
+- Thêm bước đăng nhập `/login/verify-2fa` cùng phương án dự phòng `/login/recovery-code`.
+- Secret TOTP được mã hóa AES-256-GCM bằng khóa môi trường; recovery code và login challenge chỉ được lưu dạng hash.
+- Challenge có thời hạn, giới hạn số lần thử, chống tái sử dụng và được đánh dấu đã dùng theo transaction.
+- Hỗ trợ tắt 2FA và tạo lại recovery code sau khi xác minh lại mật khẩu/yếu tố thứ hai.
+- Ghi activity log cho các sự kiện bảo mật quan trọng.
+- Thêm rate limit đăng nhập theo tiến trình và giới hạn lần thử challenge bền vững trong cơ sở dữ liệu.
+
+### Migration và cấu hình
+
+- Đã thêm và áp dụng migration `20260717010000_two_factor_authentication` lên Neon.
+- Bổ sung `TWO_FACTOR_ENCRYPTION_KEY`, `TWO_FACTOR_CHALLENGE_TTL_MINUTES`, `TWO_FACTOR_MAX_ATTEMPTS` trong `.env.example`.
+- `TWO_FACTOR_ENCRYPTION_KEY` phải là chuỗi base64 biểu diễn đúng 32 byte và phải được cấu hình riêng ở local/Vercel.
+
+### Bug/rủi ro gặp phải và cách fix
+
+- Nguy cơ cấp session ngay sau bước mật khẩu: tách password verification khỏi Auth.js sign-in, chỉ tạo challenge HttpOnly cho tài khoản bật 2FA; session chỉ được cấp sau khi challenge và TOTP/recovery code hợp lệ.
+- Nguy cơ race condition khi dùng lại challenge hoặc recovery code: dùng `updateMany` có điều kiện trong transaction; nếu tài nguyên đã bị tiêu thụ thì rollback toàn transaction.
+- Nguy cơ lộ secret: không đưa secret vào session/DTO/log, mã hóa secret trước khi ghi database và chỉ trả QR trong bước setup.
+
+### File/khu vực chính
+
+- `prisma/schema.prisma`
+- `prisma/migrations/20260717010000_two_factor_authentication/migration.sql`
+- `src/auth.ts`, `src/auth.config.ts`
+- `src/features/auth/service.ts`
+- `src/features/auth/actions.ts`
+- `src/features/auth/two-factor-service.ts`
+- `src/features/auth/two-factor-actions.ts`
+- `src/lib/encryption.ts`, `src/lib/rate-limit.ts`
+- `src/lib/validators/two-factor.ts`
+- `src/app/(auth)/login/verify-2fa/*`
+- `src/app/(auth)/login/recovery-code/*`
+- `src/app/(dashboard)/settings/security/*`
+- `src/components/auth/two-factor-login-form.tsx`
+- `src/components/auth/two-factor-settings.tsx`
+- `tests/encryption.test.ts`, `tests/two-factor-service.test.ts`
+
+### Kiểm tra
+
+- Unit/service tests: 59/59 đạt trên 20 test files.
+- ESLint: đạt.
+- TypeScript strict type-check: đạt.
+- Production build Next.js 16.2.10/Turbopack: đạt và nhận diện đầy đủ route 2FA.
+
+### Ghi chú còn tồn đọng
+
+- Chưa chạy browser E2E với ứng dụng Authenticator thật vì `.env.local` hiện chưa có `TWO_FACTOR_ENCRYPTION_KEY`: **Cần người vận hành cấu hình và xác minh thêm**.
+- Rate limit mật khẩu hiện là best-effort theo từng tiến trình; giới hạn số lần thử 2FA nằm trong database và hoạt động xuyên instance. Nếu cần chống brute-force phân tán ở quy mô lớn, nên chuyển password rate limit sang Redis/KV hoặc bảng database chuyên dụng.

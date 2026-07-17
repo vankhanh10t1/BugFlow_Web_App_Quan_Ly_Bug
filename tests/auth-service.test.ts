@@ -6,17 +6,19 @@ const mocks = vi.hoisted(() => ({
   findFirst: vi.fn(),
   update: vi.fn(),
   create: vi.fn(),
+  activityCreate: vi.fn(),
+  transaction: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/prisma", () => ({
-  prisma: { user: mocks },
+  prisma: { user: mocks, $transaction: mocks.transaction },
 }));
 
 import { authenticateUser, registerUser } from "@/features/auth/service";
 
 describe("authentication service", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mocks.transaction.mockImplementation((callback) => callback({ user: { update: mocks.update }, activityLog: { create: mocks.activityCreate } })); });
 
   it("authenticates an active user without returning the password hash", async () => {
     mocks.findUnique.mockResolvedValue({ id: "user-1", email: "tester@bugflow.dev", fullName: "QA Tester", avatarUrl: null, systemRole: "TESTER", accountStatus: "ACTIVE", passwordHash: await hash("Password@123", 4) });

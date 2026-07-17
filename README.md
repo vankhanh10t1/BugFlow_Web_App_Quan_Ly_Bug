@@ -562,3 +562,39 @@ All eight MVP phases are complete. Next steps are production-like E2E, observabi
 ### Screenshots
 
 Placeholder — product screenshots will be added after the remaining UI phases are complete.
+
+---
+
+## Bổ sung bảo mật — Phase 4: Xác thực hai lớp (2FA)
+
+- Người dùng bật/tắt 2FA tại `/settings/security`; quá trình bật yêu cầu nhập lại mật khẩu, quét QR bằng ứng dụng Authenticator và xác nhận mã TOTP 6 chữ số.
+- Sau khi bật, hệ thống hiển thị 10 mã khôi phục đúng một lần. Cơ sở dữ liệu chỉ lưu SHA-256 của mã khôi phục; mỗi mã chỉ dùng được một lần.
+- Tài khoản đã bật 2FA phải hoàn thành bước `/login/verify-2fa` hoặc `/login/recovery-code` trước khi Auth.js cấp session.
+- Secret TOTP được mã hóa AES-256-GCM. Login challenge được lưu dạng hash, có thời hạn, giới hạn số lần thử và bị vô hiệu hóa sau khi dùng.
+- Các sự kiện bật/tắt 2FA, đăng nhập thành công/thất bại, xác minh sai và dùng recovery code được ghi vào activity log.
+
+Thêm các biến sau vào `.env.local` và Vercel. `TWO_FACTOR_ENCRYPTION_KEY` phải là khóa base64 đúng 32 byte và không được dùng tiền tố `NEXT_PUBLIC_`:
+
+```env
+TWO_FACTOR_ENCRYPTION_KEY="base64-encoded-32-byte-key"
+TWO_FACTOR_CHALLENGE_TTL_MINUTES="5"
+TWO_FACTOR_MAX_ATTEMPTS="5"
+```
+
+Tạo khóa bằng Node.js:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Migration cần triển khai: `20260717010000_two_factor_authentication`. Chạy `npm run db:deploy` trước khi phát hành phiên bản có 2FA.
+
+## Security extension — Phase 4: Two-factor authentication (2FA)
+
+- Users manage 2FA at `/settings/security`. Enrollment requires the current password, an Authenticator QR scan, and a valid six-digit TOTP.
+- Enrollment produces ten one-time recovery codes. Only their SHA-256 hashes are stored, and each code can be consumed once.
+- A 2FA-enabled account must complete `/login/verify-2fa` or `/login/recovery-code` before Auth.js creates a session.
+- TOTP secrets use AES-256-GCM encryption. Login challenges are hashed, expiring, attempt-limited, and single-use.
+- Security events are recorded in the activity log.
+
+Configure `TWO_FACTOR_ENCRYPTION_KEY`, `TWO_FACTOR_CHALLENGE_TTL_MINUTES`, and `TWO_FACTOR_MAX_ATTEMPTS` as shown above in both local and Vercel environments. Deploy migration `20260717010000_two_factor_authentication` before releasing 2FA.
