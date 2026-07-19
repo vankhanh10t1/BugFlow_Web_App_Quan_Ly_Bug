@@ -1067,3 +1067,82 @@
 3. User chưa enroll phải nhận trạng thái `REQUIRE_2FA` và tới `/login/setup-2fa`; user đã enroll tới `/login/verify-2fa`.
 4. Mã sai/hết hạn hiển thị lỗi; chỉ mã hợp lệ mới tạo session và tới `/dashboard`.
 5. Khi cố ý cấu hình sai encryption key ở môi trường kiểm thử, login form phải báo không thể khởi tạo 2FA và server log có `[login-2fa] failed`, không xuất hiện dữ liệu nhạy cảm.
+
+---
+
+## Fix production — Mã TOTP đúng nhưng bị báo challenge không hợp lệ
+
+### Hiện tượng
+
+- Localhost xác minh 2FA thành công nhưng deployment trả thông báo chung rằng mã sai, challenge hết hạn hoặc bị khóa.
+
+### Nguyên nhân/rủi ro
+
+- UI trước đây gom mọi trạng thái từ Auth.js `CredentialsSignin` vào một message nên không xác định được lỗi thuộc mã TOTP hay vòng đời challenge.
+- Challenge mặc định 5 phút có thể hết hạn trong lúc người dùng demo lần đầu, quét QR và cấu hình Authenticator.
+- Đồng hồ điện thoại lệch hơn một chu kỳ 30 giây có thể làm mã hiện tại bị từ chối dù người dùng nhìn thấy mã còn hiệu lực.
+- Vercel CLI không có trong workspace nên chưa đọc được log deployment trực tiếp: trạng thái env thực tế vẫn cần xác minh trên Vercel Dashboard.
+
+### Cách fix
+
+- Thêm `getLoginChallengeState` để phân biệt `ACTIVE`, `EXPIRED`, `LOCKED`, `USED`, `INVALID` sau khi Auth.js từ chối credentials.
+- UI trả message riêng cho từng trạng thái; nếu challenge còn active thì hướng dẫn bật đồng bộ thời gian và thử mã mới nhất.
+- Tăng TTL mặc định lên 10 phút và thêm `TWO_FACTOR_TOTP_WINDOW`, mặc định `2` chu kỳ, giới hạn tối đa ±60 giây.
+- Ghi log reason code `invalid_totp`/`invalid_recovery_code` cùng user ID, không log mã hoặc token thật.
+
+### File đã sửa
+
+- `src/features/auth/two-factor-service.ts`
+- `src/features/auth/two-factor-actions.ts`
+- `tests/two-factor-service.test.ts`
+- `.env.example`
+- `README.md`
+- `nhat-ki-phases.md`
+
+### Cách test lại
+
+1. Trên Vercel đặt TTL `10`, max attempts `5`, TOTP window `2`, giữ nguyên encryption key đã cấu hình và redeploy.
+2. Bật ngày/giờ tự động trên điện thoại, đăng nhập lại để tạo challenge mới và nhập mã vừa chuyển sang chu kỳ mới.
+3. Xác nhận mã đúng vào dashboard; cố ý chờ quá TTL phải nhận message hết hạn; nhập sai đủ số lần phải nhận message bị khóa.
+
+---
+
+## Security hardening — Persistent Rate Limiting
+
+### Mục tiêu
+
+- Chống brute force, spam và abuse tại các flow nhạy cảm mà không làm khó việc demo bình thường.
+- Rate limit phải nhất quán giữa nhiều Vercel/serverless instance.
+
+### Đã làm
+
+- Thay limiter `Map` in-memory bằng bảng Prisma `RateLimitBucket` trên Neon.
+- Key bucket là SHA-256 của scope và identifier; không lưu IP, email, challenge token hoặc user ID thô.
+- Counter tăng bằng `updateMany` có điều kiện để tránh vượt quota khi request đồng thời; bucket hết hạn được reset và dữ liệu cũ được dọn cơ hội.
+- Login: 5/10 phút theo IP và email; verify 2FA: 5/10 phút theo IP và challenge; register: 5/1 giờ theo IP và email.
+- Tạo bug/comment: 20/1 phút/user; cập nhật bug/comment: 30/1 phút/user.
+- Tạo project: 10/1 phút/user; thêm thành viên: 20/1 phút/user.
+- Admin create/update/role/status/deactivate dùng quota chung 30/1 phút/Admin.
+- Upload attachment: 10/1 phút/user; deadline cron: 5/1 phút toàn hệ thống sau khi xác minh `CRON_SECRET`.
+- Áp dụng cả API Route và Server Action cho các flow có hai đường vào.
+- HTTP 429 trả thông báo tiếng Việt rõ ràng; UI dùng `message` hiện có nên không coi đây là lỗi hệ thống chung.
+- Không thêm resend 2FA hoặc forgot/reset password vì project hiện không có các flow này.
+
+### Migration
+
+- `prisma/migrations/20260719000000_persistent_rate_limiting/migration.sql`
+
+### File chính đã sửa
+
+- `prisma/schema.prisma`
+- `src/lib/rate-limit.ts`, `src/lib/errors.ts`, `src/lib/api-response.ts`
+- `src/features/auth/actions.ts`, `src/features/auth/two-factor-actions.ts`
+- `src/features/bugs/actions.ts`, `src/features/comments/actions.ts`, `src/features/projects/actions.ts`
+- Các API auth/register, bugs, comments, projects, admin users, uploads và deadline cron liên quan.
+- `tests/rate-limit.test.ts`, `tests/deadline-cron-route.test.ts`
+
+### Kiểm tra
+
+- Test limiter bao phủ quota, HTTP-style 429 error, reset cửa sổ và hash identifier.
+- Test cron xác nhận rate limit chỉ chạy sau khi Bearer secret hợp lệ.
+- Tổng test tại thời điểm triển khai: 66/66 đạt trên 21 test files.

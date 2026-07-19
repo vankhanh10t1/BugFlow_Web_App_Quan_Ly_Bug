@@ -12,8 +12,9 @@ const terminalChallengeError = "Phiên xác thực không hợp lệ hoặc đã
 const authUserSelect = { id: true, email: true, fullName: true, avatarUrl: true, systemRole: true, accountStatus: true } as const;
 
 function sha256(value: string) { return createHash("sha256").update(value).digest("hex"); }
-function challengeTtlMinutes() { const value = Number(process.env.TWO_FACTOR_CHALLENGE_TTL_MINUTES ?? 5); return Number.isFinite(value) && value > 0 && value <= 30 ? value : 5; }
+function challengeTtlMinutes() { const value = Number(process.env.TWO_FACTOR_CHALLENGE_TTL_MINUTES ?? 10); return Number.isFinite(value) && value > 0 && value <= 30 ? value : 10; }
 function maxAttempts() { const value = Number(process.env.TWO_FACTOR_MAX_ATTEMPTS ?? 5); return Number.isInteger(value) && value >= 3 && value <= 10 ? value : 5; }
+function totpWindow() { const value = Number(process.env.TWO_FACTOR_TOTP_WINDOW ?? 2); return Number.isInteger(value) && value >= 1 && value <= 2 ? value : 2; }
 function normalizeRecoveryCode(value: string) { return value.trim().toUpperCase(); }
 function recoveryCodeHash(value: string) { return sha256(normalizeRecoveryCode(value)); }
 
@@ -21,7 +22,7 @@ function totp(secret: string, label: string) {
   return new OTPAuth.TOTP({ issuer: "BugFlow", label, algorithm: "SHA1", digits: 6, period: 30, secret: OTPAuth.Secret.fromBase32(secret) });
 }
 
-function validTotp(secret: string, label: string, code: string) { return totp(secret, label).validate({ token: code, window: 1 }) !== null; }
+function validTotp(secret: string, label: string, code: string) { return totp(secret, label).validate({ token: code, window: totpWindow() }) !== null; }
 
 function generateRecoveryCodes() {
   return Array.from({ length: RECOVERY_CODE_COUNT }, () => randomBytes(16).toString("hex").toUpperCase().match(/.{1,4}/g)!.join("-"));
@@ -87,6 +88,18 @@ export async function getPendingLoginSetup(challengeToken: string) {
   return { qrCodeDataUrl: await QRCode.toDataURL(uri, { width: 280, margin: 1, errorCorrectionLevel: "M" }) };
 }
 
+export async function getLoginChallengeState(challengeToken: string): Promise<"ACTIVE" | "EXPIRED" | "LOCKED" | "USED" | "INVALID"> {
+  const challenge = await prisma.twoFactorLoginChallenge.findUnique({
+    where: { tokenHash: sha256(challengeToken) },
+    select: { expiresAt: true, usedAt: true, failedAttempts: true },
+  });
+  if (!challenge) return "INVALID";
+  if (challenge.usedAt) return "USED";
+  if (challenge.expiresAt <= new Date()) return "EXPIRED";
+  if (challenge.failedAttempts >= maxAttempts()) return "LOCKED";
+  return "ACTIVE";
+}
+
 export async function verifyTwoFactorLogin(challengeToken: string, verification: string, method: "totp" | "recovery") {
   const now = new Date();
   const challenge = await prisma.twoFactorLoginChallenge.findUnique({ where: { tokenHash: sha256(challengeToken) }, select: { id: true, userId: true, expiresAt: true, usedAt: true, failedAttempts: true, user: { select: { ...authUserSelect, twoFactorEnabled: true, twoFactorSecretEncrypted: true } } } });
@@ -105,6 +118,7 @@ export async function verifyTwoFactorLogin(challengeToken: string, verification:
   if (!valid) {
     await prisma.twoFactorLoginChallenge.update({ where: { id: challenge.id }, data: { failedAttempts: { increment: 1 } } });
     await audit(challenge.userId, "TWO_FACTOR_VERIFICATION_FAILED", "Two-factor login verification failed");
+    console.warn("[login-2fa] rejected", { step: "verification", userId: challenge.userId, reason: method === "totp" ? "invalid_totp" : "invalid_recovery_code" });
     return null;
   }
 

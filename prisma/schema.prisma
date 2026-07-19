@@ -370,3 +370,15 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+model RateLimitBucket {
+  id          String   @id
+  scope       String
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+  expiresAt   DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@index([expiresAt])
+  @@index([scope, expiresAt])
+}

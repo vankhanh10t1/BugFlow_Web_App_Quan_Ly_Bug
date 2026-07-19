@@ -4,6 +4,7 @@ export type ErrorCode =
   | "FORBIDDEN"
   | "DUPLICATE_RESOURCE"
   | "VALIDATION_ERROR"
+  | "RATE_LIMITED"
   | "DATABASE_ERROR";
 
 export class AppError extends Error {

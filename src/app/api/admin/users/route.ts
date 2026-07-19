@@ -3,6 +3,7 @@ import { requireSystemRole } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { createAdminUserSchema, adminUserQuerySchema } from "@/lib/validators/admin-user";
 import { createUserByAdmin, listUsers } from "@/features/users/admin-service";
+import { enforceUserMutationLimit } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     const actor = await requireSystemRole(["ADMIN"]);
     const input = createAdminUserSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", input.error.issues[0]?.message ?? "Dữ liệu người dùng không hợp lệ", 400);
+    await enforceUserMutationLimit("admin:mutation", actor.id, 30);
     return apiSuccess(await createUserByAdmin(actor, input.data), "Đã tạo tài khoản", 201);
   } catch (error) { return apiError(error); }
 }

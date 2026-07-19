@@ -15,7 +15,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: {
 } }));
 
 import { encryptSecret } from "@/lib/encryption";
-import { confirmTwoFactorSetup, createLoginChallenge, getTwoFactorStatus, verifyTwoFactorLogin } from "@/features/auth/two-factor-service";
+import { confirmTwoFactorSetup, createLoginChallenge, getLoginChallengeState, getTwoFactorStatus, verifyTwoFactorLogin } from "@/features/auth/two-factor-service";
 
 const secret = new OTPAuth.Secret({ size: 20 }).base32;
 const generator = new OTPAuth.TOTP({ issuer: "BugFlow", label: "user@example.com", secret: OTPAuth.Secret.fromBase32(secret), digits: 6, period: 30 });
@@ -70,6 +70,11 @@ describe("two-factor service", () => {
     mocks.challengeFindUnique.mockResolvedValue({ id: "challenge-1", userId: "user-1", expiresAt: new Date(Date.now() - 1), usedAt: null, failedAttempts: 0, user: { ...baseUser, twoFactorSecretEncrypted: encryptSecret(secret) } });
     expect(await verifyTwoFactorLogin("x".repeat(40), generator.generate(), "totp")).toBeNull();
     expect(mocks.challengeUpdate).not.toHaveBeenCalled();
+  });
+
+  it("reports challenge expiry separately from an invalid TOTP", async () => {
+    mocks.challengeFindUnique.mockResolvedValue({ expiresAt: new Date(Date.now() - 1), usedAt: null, failedAttempts: 0 });
+    await expect(getLoginChallengeState("x".repeat(40))).resolves.toBe("EXPIRED");
   });
 
   it("rejects an already used challenge", async () => {

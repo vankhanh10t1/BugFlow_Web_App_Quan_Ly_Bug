@@ -11,7 +11,7 @@ export function apiSuccess<T>(data: T, message: string, status = 200) {
 export function apiError(error: unknown) {
   if (error instanceof AppError) {
     return NextResponse.json(
-      { success: false, message: error.message, errors: [], timestamp: new Date().toISOString() },
+      { success: false, ...(error.status === 429 ? { error: error.message } : {}), message: error.message, errors: [], timestamp: new Date().toISOString() },
       { status: error.status },
     );
   }

@@ -644,3 +644,34 @@ Nếu Vercel vẫn báo không thể khởi tạo 2FA, kiểm tra và redeploy s
 - Không đặt `AUTH_URL`/`NEXTAUTH_URL` thành localhost trong Production/Preview
 
 The pending-2FA login action now returns a stable `REQUIRE_2FA` state while retaining the sensitive challenge token in an HttpOnly cookie. Database, migration, and encryption-configuration failures are logged safely and rendered as friendly form errors instead of uncaught Server Component failures.
+
+### TOTP trên môi trường production
+
+Production mặc định cho phép lệch tối đa hai chu kỳ TOTP 30 giây và challenge tồn tại 10 phút. Có thể cấu hình:
+
+```env
+TWO_FACTOR_CHALLENGE_TTL_MINUTES="10"
+TWO_FACTOR_MAX_ATTEMPTS="5"
+TWO_FACTOR_TOTP_WINDOW="2"
+```
+
+Nếu mã đúng trên localhost nhưng bị từ chối trên production, bảo đảm điện thoại bật **Ngày và giờ tự động**, dùng mã mới nhất, và kiểm tra Vercel đang dùng đúng `TWO_FACTOR_ENCRYPTION_KEY` đã dùng khi tạo QR. Sau khi thay đổi env phải redeploy và đăng nhập lại để tạo challenge mới. UI hiện phân biệt rõ challenge hết hạn, bị khóa, đã dùng, không tồn tại và mã TOTP không hợp lệ.
+
+### Rate limiting cho API và mutation nhạy cảm
+
+Rate limit dùng bảng PostgreSQL `RateLimitBucket`, hoạt động xuyên nhiều Vercel instance và không cần Redis/dependency mới. Identifier IP, email, challenge và user ID được SHA-256 cùng scope trước khi lưu; database không lưu giá trị gốc.
+
+| Flow | Giới hạn |
+|---|---:|
+| Login | 5/10 phút cho mỗi IP và email |
+| Verify 2FA | 5/10 phút cho mỗi IP và challenge |
+| Register | 5/1 giờ cho mỗi IP và email |
+| Tạo bug/comment | 20/1 phút cho mỗi user |
+| Cập nhật bug/comment | 30/1 phút cho mỗi user |
+| Tạo project | 10/1 phút cho mỗi user |
+| Thêm thành viên project | 20/1 phút cho mỗi user |
+| Admin mutations | 30/1 phút cho mỗi Admin |
+| Upload attachment | 10/1 phút cho mỗi user |
+| Deadline notification job | 5/1 phút toàn hệ thống, sau kiểm tra `CRON_SECRET` |
+
+Vượt giới hạn trả HTTP `429` với thông báo `Bạn thao tác quá nhanh. Vui lòng chờ rồi thử lại sau.` API response có cả `error` và `message`; Server Actions đưa cùng message về UI. Migration cần deploy: `20260719000000_persistent_rate_limiting`.

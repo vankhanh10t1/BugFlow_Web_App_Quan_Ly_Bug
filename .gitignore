@@ -40,6 +40,7 @@ yarn-error.log*
 # local project specification
 /yêu cầu code.md
 /lỗi.md
+/yêu cầu bảo mật.md
 
 # vercel
 .vercel

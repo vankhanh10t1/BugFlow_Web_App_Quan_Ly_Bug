@@ -7,7 +7,7 @@ import { registerUser, verifyPasswordLogin } from "@/features/auth/service";
 import { createLoginChallenge } from "@/features/auth/two-factor-service";
 import { AppError } from "@/lib/errors";
 import { loginSchema, registerSchema } from "@/lib/validators/auth";
-import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { enforceLoginLimit, enforceRegistrationLimit, requestIp } from "@/lib/rate-limit";
 
 export type AuthActionState = {
   success: boolean;
@@ -29,7 +29,7 @@ export async function loginAction(_: AuthActionState, formData: FormData): Promi
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, status: "ERROR", message: "Vui lòng kiểm tra các trường được đánh dấu", fieldErrors: parsed.error.flatten().fieldErrors };
 
-  try { consumeRateLimit("login", rateLimitKey(parsed.data.email), 10, 15 * 60_000); }
+  try { await enforceLoginLimit(await requestIp(), parsed.data.email); }
   catch (error) { return { success: false, status: "ERROR", message: error instanceof AppError ? error.message : "Bạn đã thử quá nhiều lần" }; }
 
   let passwordLogin: Awaited<ReturnType<typeof verifyPasswordLogin>>;
@@ -59,6 +59,9 @@ export async function loginAction(_: AuthActionState, formData: FormData): Promi
 export async function registerAction(_: AuthActionState, formData: FormData): Promise<AuthActionState> {
   const parsed = registerSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, status: "ERROR", message: "Vui lòng kiểm tra các trường được đánh dấu", fieldErrors: parsed.error.flatten().fieldErrors };
+
+  try { await enforceRegistrationLimit(await requestIp(), parsed.data.email); }
+  catch (error) { return { success: false, status: "ERROR", message: error instanceof AppError ? error.message : "Không thể kiểm tra giới hạn đăng ký" }; }
 
   try {
     await registerUser(parsed.data);

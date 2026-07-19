@@ -7,8 +7,8 @@ import { revalidatePath } from "next/cache";
 import { signIn } from "@/auth";
 import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
-import { consumeRateLimit, rateLimitKey } from "@/lib/rate-limit";
-import { beginTwoFactorSetup, confirmTwoFactorSetup, regenerateRecoveryCodes } from "@/features/auth/two-factor-service";
+import { enforceTwoFactorLimit, requestIp } from "@/lib/rate-limit";
+import { beginTwoFactorSetup, confirmTwoFactorSetup, getLoginChallengeState, regenerateRecoveryCodes } from "@/features/auth/two-factor-service";
 import { confirmTwoFactorSchema, regenerateRecoveryCodesSchema, setupTwoFactorSchema, twoFactorCredentialsSchema } from "@/lib/validators/two-factor";
 
 export type TwoFactorActionState = { success: boolean; message: string; qrCodeDataUrl?: string; recoveryCodes?: string[]; fieldErrors?: Record<string, string[]> } | undefined;
@@ -20,11 +20,18 @@ export async function verifyTwoFactorLoginAction(method: "totp" | "recovery", _:
   const input = twoFactorCredentialsSchema.safeParse({ challengeToken, verification: formData.get("verification"), method });
   if (!input.success) return { success: false, message: challengeToken ? input.error.issues[0]?.message ?? "Mã xác thực không hợp lệ" : "Phiên xác thực không hợp lệ hoặc đã hết hạn" };
   try {
-    consumeRateLimit("verify-2fa", rateLimitKey(input.data.challengeToken), 10, 10 * 60_000);
+    await enforceTwoFactorLimit(await requestIp(), input.data.challengeToken);
     await signIn("credentials", { ...input.data, redirect: false });
     cookieStore.delete("bugflow_2fa_challenge");
   } catch (error) {
-    if (error instanceof AuthError) return { success: false, message: "Mã xác thực không đúng, challenge đã hết hạn hoặc đã bị khóa" };
+    if (error instanceof AuthError) {
+      const challengeState = await getLoginChallengeState(input.data.challengeToken).catch(() => "INVALID" as const);
+      if (challengeState === "EXPIRED") return { success: false, message: "Phiên xác thực 2FA đã hết hạn. Vui lòng đăng nhập lại." };
+      if (challengeState === "LOCKED") return { success: false, message: "Phiên xác thực đã bị khóa do nhập sai quá nhiều lần. Vui lòng đăng nhập lại." };
+      if (challengeState === "USED") return { success: false, message: "Phiên xác thực này đã được sử dụng. Vui lòng đăng nhập lại." };
+      if (challengeState === "INVALID") return { success: false, message: "Không tìm thấy phiên xác thực 2FA. Vui lòng đăng nhập lại." };
+      return { success: false, message: "Mã xác thực không đúng. Hãy bật đồng bộ thời gian tự động trên điện thoại và thử mã mới nhất." };
+    }
     console.error("[login-2fa] failed", { step: "verification", error: error instanceof Error ? error.message : String(error) });
     return failure(error, "Không thể xác thực two-factor authentication");
   }

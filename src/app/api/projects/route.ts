@@ -3,6 +3,7 @@ import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { projectInputSchema, projectQuerySchema } from "@/lib/validators/project";
 import { createProject, listProjects } from "@/features/projects/service";
+import { enforceUserMutationLimit } from "@/lib/rate-limit";
 
 export async function GET(request: Request) {
   try {
@@ -18,6 +19,7 @@ export async function POST(request: Request) {
     const actor = await requireActiveUser();
     const input = projectInputSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", "Invalid project data", 400);
+    await enforceUserMutationLimit("project:create", actor.id, 10);
     return apiSuccess(await createProject(actor, input.data), "Project created successfully", 201);
   } catch (error) { return apiError(error); }
 }

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
+import { enforceUserMutationLimit } from "@/lib/rate-limit";
 import { addProjectMemberSchema, projectInputSchema, updateProjectMemberSchema } from "@/lib/validators/project";
 import { addProjectMember, archiveProject, createProject, removeProjectMember, updateProject, updateProjectMemberRole } from "@/features/projects/service";
 
@@ -18,7 +19,7 @@ export async function createProjectAction(_: ProjectActionState, formData: FormD
   const parsed = projectInputSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, message: "Check the highlighted fields", fieldErrors: parsed.error.flatten().fieldErrors };
   let projectId: string;
-  try { projectId = (await createProject(actor, parsed.data)).id; } catch (error) { return failure(error); }
+  try { await enforceUserMutationLimit("project:create", actor.id, 10); projectId = (await createProject(actor, parsed.data)).id; } catch (error) { return failure(error); }
   redirect(`/projects/${projectId}`);
 }
 
@@ -40,7 +41,7 @@ export async function addMemberAction(projectId: string, _: ProjectActionState, 
   const actor = await requireActiveUser();
   const parsed = addProjectMemberSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, message: "Select a valid user and role", fieldErrors: parsed.error.flatten().fieldErrors };
-  try { await addProjectMember(projectId, actor, parsed.data.userId, parsed.data.role); revalidatePath(`/projects/${projectId}`); return { success: true, message: "Member added successfully" }; } catch (error) { return failure(error); }
+  try { await enforceUserMutationLimit("project:member:add", actor.id); await addProjectMember(projectId, actor, parsed.data.userId, parsed.data.role); revalidatePath(`/projects/${projectId}`); return { success: true, message: "Member added successfully" }; } catch (error) { return failure(error); }
 }
 
 export async function updateMemberRoleAction(projectId: string, memberId: string, formData: FormData) {

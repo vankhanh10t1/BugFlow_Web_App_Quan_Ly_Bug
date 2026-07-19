@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
+import { enforceUserMutationLimit } from "@/lib/rate-limit";
 import { assignBugSchema, bugInputSchema, bugUpdateSchema, prioritySchema, severitySchema } from "@/lib/validators/bug";
 import { assignBug, createBug, updateBug, updateBugPriority, updateBugSeverity } from "@/features/bugs/service";
 
@@ -13,13 +14,13 @@ const fail = (error: unknown): BugActionState => ({ success: false, message: err
 export async function createBugAction(_: BugActionState, formData: FormData): Promise<BugActionState> {
   const actor = await requireActiveUser(); const parsed = bugInputSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, message: "Check the highlighted fields", fieldErrors: parsed.error.flatten().fieldErrors };
-  let id: string; try { id = (await createBug(actor, parsed.data)).id; } catch (error) { return fail(error); } redirect(`/bugs/${id}`);
+  let id: string; try { await enforceUserMutationLimit("bug:create", actor.id); id = (await createBug(actor, parsed.data)).id; } catch (error) { return fail(error); } redirect(`/bugs/${id}`);
 }
 
 export async function updateBugAction(bugId: string, _: BugActionState, formData: FormData): Promise<BugActionState> {
   const actor = await requireActiveUser(); const parsed = bugUpdateSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, message: "Check the highlighted fields", fieldErrors: parsed.error.flatten().fieldErrors };
-  try { await updateBug(bugId, actor, parsed.data); revalidatePath(`/bugs/${bugId}`); return { success: true, message: "Bug updated successfully" }; } catch (error) { return fail(error); }
+  try { await enforceUserMutationLimit("bug:update", actor.id, 30); await updateBug(bugId, actor, parsed.data); revalidatePath(`/bugs/${bugId}`); return { success: true, message: "Bug updated successfully" }; } catch (error) { return fail(error); }
 }
 
 export async function assignBugAction(bugId: string, _: BugActionState, formData: FormData): Promise<BugActionState> {
