@@ -96,6 +96,13 @@ enum NotificationType {
   BUG_DEADLINE_SOON
   DUE_DATE_APPROACHING
   BUG_OVERDUE
+  CHAT_MESSAGE
+}
+
+enum ChatConversationType {
+  PROJECT
+  DIRECT
+  SUPPORT
 }
 
 enum AttachmentType {
@@ -107,35 +114,38 @@ enum AttachmentType {
 }
 
 model User {
-  id                   String          @id @default(cuid())
-  email                String          @unique
-  passwordHash         String
-  fullName             String
-  username             String          @unique
-  avatarUrl            String?
-  avatarPublicId       String?
-  systemRole           SystemRole      @default(TESTER)
-  accountStatus        AccountStatus   @default(ACTIVE)
-  lastLoginAt          DateTime?
-  twoFactorEnabled     Boolean         @default(false)
+  id                       String                    @id @default(cuid())
+  email                    String                    @unique
+  passwordHash             String
+  fullName                 String
+  username                 String                    @unique
+  avatarUrl                String?
+  avatarPublicId           String?
+  systemRole               SystemRole                @default(TESTER)
+  accountStatus            AccountStatus             @default(ACTIVE)
+  lastLoginAt              DateTime?
+  twoFactorEnabled         Boolean                   @default(false)
   twoFactorSecretEncrypted String?
-  twoFactorEnabledAt   DateTime?
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-  projectsCreated      Project[]       @relation("ProjectCreator")
-  projectMemberships   ProjectMember[]
-  bugsReported         Bug[]           @relation("BugReporter")
-  bugsAssigned         Bug[]           @relation("BugAssignee")
-  bugsTested           Bug[]           @relation("BugTester")
-  comments             Comment[]
-  attachments          Attachment[]
-  activities           ActivityLog[]
-  notifications        Notification[]  @relation("NotificationRecipient")
-  notificationsCreated Notification[]  @relation("NotificationActor")
-  accounts             Account[]
-  sessions             Session[]
-  twoFactorRecoveryCodes TwoFactorRecoveryCode[]
+  twoFactorEnabledAt       DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  projectsCreated          Project[]                 @relation("ProjectCreator")
+  projectMemberships       ProjectMember[]
+  bugsReported             Bug[]                     @relation("BugReporter")
+  bugsAssigned             Bug[]                     @relation("BugAssignee")
+  bugsTested               Bug[]                     @relation("BugTester")
+  comments                 Comment[]
+  attachments              Attachment[]
+  activities               ActivityLog[]
+  notifications            Notification[]            @relation("NotificationRecipient")
+  notificationsCreated     Notification[]            @relation("NotificationActor")
+  accounts                 Account[]
+  sessions                 Session[]
+  twoFactorRecoveryCodes   TwoFactorRecoveryCode[]
   twoFactorLoginChallenges TwoFactorLoginChallenge[]
+  chatConversationsCreated ChatConversation[]        @relation("ChatConversationCreator")
+  chatParticipants         ChatParticipant[]
+  chatMessages             ChatMessage[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -143,22 +153,23 @@ model User {
 }
 
 model Project {
-  id              String          @id @default(cuid())
-  code            String          @unique
-  name            String
-  description     String?
-  status          ProjectStatus   @default(PLANNING)
-  startDate       DateTime?
-  expectedEndDate DateTime?
-  nextBugNumber   Int             @default(1)
-  createdById     String
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  createdBy       User            @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  members         ProjectMember[]
-  bugs            Bug[]
-  activities      ActivityLog[]
-  notifications   Notification[]
+  id               String            @id @default(cuid())
+  code             String            @unique
+  name             String
+  description      String?
+  status           ProjectStatus     @default(PLANNING)
+  startDate        DateTime?
+  expectedEndDate  DateTime?
+  nextBugNumber    Int               @default(1)
+  createdById      String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  createdBy        User              @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members          ProjectMember[]
+  bugs             Bug[]
+  activities       ActivityLog[]
+  notifications    Notification[]
+  chatConversation ChatConversation?
 
   @@index([status])
   @@index([createdById])
@@ -313,26 +324,83 @@ model TwoFactorLoginChallenge {
 }
 
 model Notification {
-  id          String           @id @default(cuid())
-  recipientId String
-  actorId     String?
-  bugId       String?
-  projectId   String?
-  dedupeKey   String?          @unique
-  type        NotificationType
-  title       String
-  message     String
-  isRead      Boolean          @default(false)
-  readAt      DateTime?
-  createdAt   DateTime         @default(now())
-  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
-  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
-  bug         Bug?             @relation(fields: [bugId], references: [id], onDelete: Cascade)
-  project     Project?         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             String            @id @default(cuid())
+  recipientId    String
+  actorId        String?
+  bugId          String?
+  projectId      String?
+  conversationId String?
+  chatMessageId  String?
+  dedupeKey      String?           @unique
+  type           NotificationType
+  title          String
+  message        String
+  isRead         Boolean           @default(false)
+  readAt         DateTime?
+  createdAt      DateTime          @default(now())
+  recipient      User              @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor          User?             @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  bug            Bug?              @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  project        Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  chatMessage    ChatMessage?      @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
 
   @@index([recipientId, isRead, createdAt])
   @@index([bugId])
   @@index([projectId])
+  @@index([conversationId])
+  @@index([chatMessageId])
+}
+
+model ChatConversation {
+  id            String               @id @default(cuid())
+  type          ChatConversationType
+  title         String?
+  projectId     String?              @unique
+  directKey     String?              @unique
+  createdById   String
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  project       Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy     User                 @relation("ChatConversationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  participants  ChatParticipant[]
+  messages      ChatMessage[]
+  notifications Notification[]
+
+  @@index([type, updatedAt])
+  @@index([createdById])
+}
+
+model ChatParticipant {
+  id             String           @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime         @default(now())
+  leftAt         DateTime?
+  lastReadAt     DateTime?
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId, leftAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  senderId       String
+  clientId       String?
+  content        String
+  createdAt      DateTime         @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User             @relation(fields: [senderId], references: [id], onDelete: Restrict)
+  notifications  Notification[]
+
+  @@unique([conversationId, clientId])
+  @@index([conversationId, createdAt, id])
+  @@index([senderId])
 }
 
 model Account {

@@ -1361,3 +1361,54 @@
 ### Trạng thái
 
 - Hoàn thành; không thay đổi database hoặc API contract.
+
+## Bổ sung — AI Chatbot và Chat nội bộ
+
+### Mục tiêu
+
+- Thêm AI safe MVP: hướng dẫn app, cải thiện báo cáo lỗi và gợi ý priority/severity.
+- Thêm chat Project, Direct và Support có persistence, ACL, unread/read receipt và polling phù hợp Vercel.
+
+### Đã làm
+
+- Thêm adapter AI OpenAI-compatible, server-only env, context theo `bugId`, whitelist dữ liệu, quota phút/ngày, timeout và launcher tiếng Việt.
+- AI không lưu transcript, không tự mutation và trả lỗi cấu hình rõ ràng mà không làm crash ứng dụng.
+- Thêm `ChatConversation`, `ChatParticipant`, `ChatMessage`, notification `CHAT_MESSAGE` và migration `20260720150000_ai_chat_and_realtime_chat`.
+- Chat Project kiểm tra membership ở từng request; `VIEWER` chỉ đọc. Direct yêu cầu project chung. Support do user mở với Admin; Admin không đọc hội thoại ngoài participant.
+- Thêm API auth/same-origin/Zod/rate limit, cursor pagination, idempotent `clientId`, read receipt và polling 4–5 giây.
+- Thêm `/chat`, unread badge, empty/loading/error states và link notification tới conversation.
+
+### File chính
+
+- `prisma/schema.prisma`, `prisma/migrations/20260720150000_ai_chat_and_realtime_chat/migration.sql`
+- `src/features/ai/*`, `src/app/api/ai/chat/route.ts`, `src/components/ai/chatbot.tsx`
+- `src/features/chat/service.ts`, `src/app/api/conversations/**`, `src/app/api/chat/candidates/route.ts`
+- `src/components/chat/*`, `src/app/(dashboard)/chat/page.tsx`
+- `.env.example`, `README.md`, `dac-ta-he-thong.md`, `tests/ai-chat-validation.test.ts`
+
+### Bug gặp phải và cách xử lý
+
+- TypeScript nới kiểu enum trong điều kiện Prisma và làm mất inference relation; đã khai báo rõ `Prisma.ChatConversationWhereInput`.
+- Provider/model AI chưa được chốt; dùng adapter HTTP OpenAI-compatible và giữ secret ở server.
+- Quyền `VIEWER` chưa chốt; chọn chính sách an toàn là chỉ đọc và ghi rõ trong UI/tài liệu.
+
+### Cách test
+
+1. Chạy `npm run db:generate`, `npm run db:deploy`, rồi cấu hình các biến `AI_*`.
+2. Đăng nhập qua 2FA; thử ba tác vụ AI và thử từ trang chi tiết Bug.
+3. Tạo chat Project bằng Manager/Tester/Developer; xác nhận Viewer chỉ đọc.
+4. Tạo Direct giữa hai user có project chung; target không có project chung phải nhận 403.
+5. User mở Support với Admin; Admin chỉ thấy conversation mình là participant.
+6. Gửi tin bằng hai user, kiểm tra polling, unread badge, notification và mark-read.
+7. Chạy `npm run test`, `npm run lint`, `npm run type-check`, `npm run build`.
+
+### Giới hạn còn lại
+
+- AI response trả một lần sau khi provider hoàn tất; streaming token/cancel có thể bổ sung sau.
+- Chat chưa có attachment, presence, typing, edit/delete/moderation và managed realtime.
+- Provider AI/DPA/data region/retention và E2E production: **Cần xác minh thêm**.
+
+### Trạng thái xác minh
+
+- Migration `20260720150000_ai_chat_and_realtime_chat` đã áp dụng thành công lên Neon development đang cấu hình.
+- Prisma validate/generate, 24 test files với 80 tests, ESLint, TypeScript và `next build` đều thành công.

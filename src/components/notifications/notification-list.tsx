@@ -12,6 +12,7 @@ type Item = {
   createdAt: string;
   bug: { id: string; bugCode: string } | null;
   project: { id: string; code: string; name: string } | null;
+  conversation: { id: string } | null;
   actor: { fullName: string } | null;
 };
 type Response = { success: true; data: { items: Item[]; unreadCount: number; pagination: { page: number; totalPages: number; total: number } } };
@@ -23,6 +24,7 @@ async function fetchNotifications(page: number) {
 }
 
 function target(item: Item) {
+  if (item.conversation) return { href: `/chat?conversation=${item.conversation.id}`, label: "Mở hội thoại" };
   if (item.bug) return { href: `/bugs/${item.bug.id}`, label: `Mở ${item.bug.bugCode}` };
   if (item.project) return { href: `/projects/${item.project.id}`, label: `Mở dự án ${item.project.code}` };
   return null;

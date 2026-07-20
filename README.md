@@ -25,6 +25,8 @@ Tài liệu công khai cho người dùng nằm tại `/docs`. Nhật ký triể
 - Chọn tối đa 5 attachment ngay trong form Báo lỗi mới; Bug luôn được tạo trước rồi file mới được upload.
 - Kiểm tra quyền và membership phía server để chống IDOR.
 - Rate limiting bền vững bằng PostgreSQL và Same-Origin/CSRF guard cho API mutation.
+- AI Chatbot MVP hỗ trợ hướng dẫn sử dụng, cải thiện báo cáo lỗi và gợi ý priority/severity; không lưu transcript và không tự thay đổi dữ liệu.
+- Chat dự án, direct chat giữa user có dự án chung và kênh hỗ trợ Admin; lưu PostgreSQL, unread/read receipt và polling 4–5 giây.
 
 ### Công nghệ
 
@@ -243,7 +245,7 @@ npm run type-check
 npm run build
 ```
 
-Trạng thái xác minh gần nhất: 23 test files, 76 tests đạt; lint, TypeScript và production build đều thành công.
+Trạng thái xác minh gần nhất: 24 test files, 80 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
 
 ### Deploy lên Vercel
 
@@ -253,6 +255,14 @@ Trạng thái xác minh gần nhất: 23 test files, 76 tests đạt; lint, Type
 4. Redeploy sau khi thay đổi environment variables.
 5. Kiểm tra login bắt buộc 2FA, database read/write, avatar, attachment, cron và HTTP 403/429.
 6. Không lưu upload trên filesystem Vercel và không expose secret qua `NEXT_PUBLIC_*`.
+
+### AI Chatbot và Chat nội bộ
+
+- Nút AI nổi trong dashboard hỗ trợ `GUIDE`, `IMPROVE_BUG`, `CLASSIFY_BUG`. Nếu mở từ trang Bug, client chỉ gửi `bugId`; server tự tải context sau khi kiểm tra quyền.
+- AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider dùng API OpenAI-compatible; toàn bộ biến `AI_*` là server-side.
+- `/chat` hỗ trợ Project, Direct và Support. Project `VIEWER` chỉ đọc; Direct yêu cầu hai user active có project chung; Support do user mở với Admin.
+- Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Chưa có attachment, presence hoặc typing indicator.
+- Cần chạy migration `20260720150000_ai_chat_and_realtime_chat` và cấu hình các biến AI trong `.env.example`.
 
 ### Giới hạn và bước tiếp theo
 
@@ -505,7 +515,7 @@ npm run type-check
 npm run build
 ```
 
-Latest verified state: 23 test files and 76 passing tests; lint, TypeScript, and the production build all pass.
+Latest verified state: 24 test files and 80 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
 
 ### Deploying to Vercel
 
