@@ -1412,3 +1412,33 @@
 
 - Migration `20260720150000_ai_chat_and_realtime_chat` đã áp dụng thành công lên Neon development đang cấu hình.
 - Prisma validate/generate, 24 test files với 80 tests, ESLint, TypeScript và `next build` đều thành công.
+
+## Cập nhật AI Provider — GroqCloud
+
+### Đã làm
+
+- Chuyển AI provider chính sang GroqCloud Chat Completions tại `https://api.groq.com/openai/v1`.
+- Thêm `selectChatbotModel()` làm điểm chọn model duy nhất: tác vụ thường dùng `llama-3.1-8b-instant`; prompt/context phức tạp hoặc từ khóa phân tích dùng `openai/gpt-oss-120b`.
+- Thay env provider chung bằng `GROQ_API_KEY`, `GROQ_DEFAULT_MODEL`, `GROQ_REASONING_MODEL`; giữ quota và timeout `AI_*` hiện có.
+- Phân loại lỗi thiếu/sai key, model không hợp lệ/không được cấp quyền, Groq rate limit, timeout và lỗi provider; UI hiển thị message mà không crash.
+- Không log API key hoặc response lỗi thô từ GroqCloud.
+
+### File đã chỉnh sửa
+
+- `src/features/ai/model-selector.ts`
+- `src/features/ai/service.ts`
+- `.env.example`, `README.md`, `dac-ta-he-thong.md`
+- `tests/ai-chat-validation.test.ts`, `nhat-ki-phases.md`
+
+### Cách test
+
+1. Tạo GroqCloud API key và cấu hình ba biến `GROQ_*` trong `.env.local`.
+2. Restart `npm run dev`; hỏi câu đơn giản và xác nhận response ghi model `llama-3.1-8b-instant` trong API data.
+3. Hỏi “Phân tích root cause và đề xuất hướng xử lý bảo mật” để xác nhận API data dùng `openai/gpt-oss-120b`.
+4. Thử bỏ key, model sai và gửi dồn request để xác nhận UI lần lượt hiển thị lỗi cấu hình/model/rate limit thân thiện.
+5. Chạy test, lint, type-check và production build.
+
+### Trạng thái xác minh
+
+- 24 test files với 82 tests, ESLint, TypeScript và production build đều thành công.
+- Production build cần truy cập Google Fonts để tải Geist/Geist Mono trong môi trường build.

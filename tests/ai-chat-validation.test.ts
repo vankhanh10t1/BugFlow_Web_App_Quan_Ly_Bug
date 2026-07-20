@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aiChatSchema } from "@/lib/validators/ai";
 import { chatMessageSchema, createConversationSchema } from "@/lib/validators/chat";
+import { selectChatbotModel } from "@/features/ai/model-selector";
 
 describe("AI chat validation", () => {
   it("accepts only the three safe MVP tasks", () => {
@@ -9,6 +10,23 @@ describe("AI chat validation", () => {
   });
   it("limits prompt length", () => {
     expect(aiChatSchema.safeParse({ task: "IMPROVE_BUG", prompt: "x".repeat(4_001) }).success).toBe(false);
+  });
+});
+
+describe("Groq model selection", () => {
+  const env = {
+    NODE_ENV: "test",
+    GROQ_DEFAULT_MODEL: "fast-model",
+    GROQ_REASONING_MODEL: "reasoning-model",
+  } as NodeJS.ProcessEnv;
+
+  it("uses the default model for lightweight requests", () => {
+    expect(selectChatbotModel({ task: "GUIDE", prompt: "Cách tạo bug mới?" }, env)).toEqual({ model: "fast-model", reasoning: false });
+  });
+
+  it("uses the reasoning model for analysis keywords or large context", () => {
+    expect(selectChatbotModel({ task: "CLASSIFY_BUG", prompt: "Phân tích root cause và đề xuất hướng xử lý" }, env).model).toBe("reasoning-model");
+    expect(selectChatbotModel({ task: "IMPROVE_BUG", prompt: "Viết lại", contextLength: 6_000 }, env).model).toBe("reasoning-model");
   });
 });
 

@@ -245,7 +245,7 @@ npm run type-check
 npm run build
 ```
 
-Trạng thái xác minh gần nhất: 24 test files, 80 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
+Trạng thái xác minh gần nhất: 24 test files, 82 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
 
 ### Deploy lên Vercel
 
@@ -259,10 +259,27 @@ Trạng thái xác minh gần nhất: 24 test files, 80 tests đạt; Prisma val
 ### AI Chatbot và Chat nội bộ
 
 - Nút AI nổi trong dashboard hỗ trợ `GUIDE`, `IMPROVE_BUG`, `CLASSIFY_BUG`. Nếu mở từ trang Bug, client chỉ gửi `bugId`; server tự tải context sau khi kiểm tra quyền.
-- AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider dùng API OpenAI-compatible; toàn bộ biến `AI_*` là server-side.
+- AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider chính là GroqCloud; API key chỉ được đọc phía server.
 - `/chat` hỗ trợ Project, Direct và Support. Project `VIEWER` chỉ đọc; Direct yêu cầu hai user active có project chung; Support do user mở với Admin.
 - Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Chưa có attachment, presence hoặc typing indicator.
 - Cần chạy migration `20260720150000_ai_chat_and_realtime_chat` và cấu hình các biến AI trong `.env.example`.
+
+#### Cấu hình GroqCloud
+
+1. Truy cập [GroqCloud Console](https://console.groq.com/).
+2. Đăng nhập hoặc tạo tài khoản.
+3. Mở mục **API Keys** và tạo API key mới.
+4. Copy key vào `.env.local`; không ghi key thật vào README hoặc Git:
+
+```env
+GROQ_API_KEY="your_groq_api_key_here"
+GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_REASONING_MODEL="openai/gpt-oss-120b"
+```
+
+`llama-3.1-8b-instant` xử lý hội thoại và tác vụ nhẹ. `openai/gpt-oss-120b` được chọn tập trung bởi `selectChatbotModel()` khi prompt dài, context lớn hoặc có yêu cầu phân tích/đánh giá/root cause/bảo mật/hướng xử lý. Khởi động lại `npm run dev` sau khi đổi env.
+
+Khi deploy Vercel: vào **Project → Settings → Environment Variables**, thêm ba biến trên cho Production/Preview cần dùng và redeploy. Không đặt `GROQ_API_KEY` dưới tên có prefix `NEXT_PUBLIC_`.
 
 ### Giới hạn và bước tiếp theo
 
@@ -515,7 +532,7 @@ npm run type-check
 npm run build
 ```
 
-Latest verified state: 24 test files and 80 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
+Latest verified state: 24 test files and 82 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
 
 ### Deploying to Vercel
 
