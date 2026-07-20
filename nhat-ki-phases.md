@@ -1319,3 +1319,45 @@
 ### Trạng thái
 
 - Hoàn thành; không có migration database mới.
+
+---
+
+## Cải tiến UI/UX — Header overflow và tự xác minh 2FA
+
+### Mục tiêu
+
+- Giữ label điều hướng Header trên một dòng và chỉ chạy marquee khi nội dung thực sự vượt chiều rộng ô.
+- Tự xác minh mã TOTP ngay khi người dùng nhập đủ 6 chữ số, đồng thời giữ submit thủ công làm fallback.
+
+### Đã làm
+
+- Tạo `NavOverflowLabel` đo `scrollWidth` và `clientWidth` bằng `ResizeObserver`.
+- Nav item dùng `min-width: 0`, giới hạn chiều rộng, `overflow: hidden`, `white-space: nowrap`; icon luôn `shrink-0` nên không bị lệch.
+- Label dài chạy qua lại nhẹ bằng CSS animation; label ngắn không có animation.
+- Mobile vẫn dùng horizontal scroll và label một dòng, không áp marquee. Người dùng bật reduced motion nhận ellipsis thay vì animation.
+- TOTP input trở thành controlled numeric input, tự loại ký tự không phải số và giới hạn 6 chữ số.
+- Khi đủ 6 số, form tự submit sau debounce 180 ms; input và nút bị disable trong lúc xác minh, loading hiển thị rõ.
+- Guard theo trạng thái request và mã vừa gửi ngăn auto-submit/Enter gọi lặp cùng một mã.
+- Khi mã sai, input được xóa, guard được reset và focus quay lại để nhập mã mới. Nút Xác minh và phím Enter vẫn hoạt động như fallback.
+- Recovery-code flow không auto-submit và vẫn cho phép thử lại sau lỗi.
+
+### File đã chỉnh sửa
+
+- `src/components/layout/nav-overflow-label.tsx`
+- `src/components/layout/dashboard-header.tsx`
+- `src/app/globals.css`
+- `src/components/auth/two-factor-login-form.tsx`
+- `nhat-ki-phases.md`
+
+### Cách test
+
+1. Đăng nhập Admin ở desktop: `Quản lý người dùng` không xuống dòng; chỉ label bị cắt mới chạy qua lại, icon và chiều cao Header không đổi.
+2. Thu/phóng cửa sổ để xác nhận ResizeObserver bật/tắt marquee theo overflow; mobile vẫn cuộn ngang bình thường.
+3. Nhập từng số TOTP: chưa đủ 6 số không gửi request; đủ 6 số tự xác minh mà không cần Enter.
+4. Nhập sai: chỉ có một request cho mã đó, input bị disable khi chờ, sau lỗi được xóa và focus lại.
+5. Nhập đúng: session chỉ được tạo sau verify thành công và redirect `/dashboard`.
+6. Kiểm tra phím Enter, nút Xác minh, Hủy và recovery code vẫn hoạt động.
+
+### Trạng thái
+
+- Hoàn thành; không thay đổi database hoặc API contract.
