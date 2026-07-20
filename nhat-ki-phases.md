@@ -1271,3 +1271,51 @@
 ### Trạng thái
 
 - Avatar upload hoàn thành. Attachment trong form tạo Bug mới chỉ được đánh giá và đề xuất scope, chưa triển khai theo đúng yêu cầu rà soát trước.
+
+---
+
+## Cải tiến Bug — Attachment trong form Báo lỗi mới
+
+### Mục tiêu
+
+- Cho phép đính kèm file minh chứng ngay khi báo lỗi nhưng tuyệt đối không upload trước khi Bug có `bugId`.
+
+### Đã làm
+
+- `createBugAction` không redirect ngay; sau khi tạo thành công trả `bugId` cho Client Component.
+- `BugForm` cho chọn nhiều file, tối đa mặc định 5 file; hiển thị tên, kích thước, preview ảnh và cho bỏ từng file trước submit.
+- Client validate JPG/JPEG/PNG/WEBP/GIF, TXT/LOG/NDJSON, PDF, MP4/WEBM, kích thước và executable extension.
+- Sau khi nhận `bugId`, client upload tuần tự qua `/api/uploads` với `bugId`; không tạo route upload mới.
+- Mỗi file có trạng thái sẵn sàng/đang tải/thành công/lỗi. Tất cả thành công thì redirect `/bugs/{bugId}`.
+- Nếu một phần upload lỗi, Bug vẫn tồn tại; UI nêu rõ tên file lỗi và có nút mở chi tiết Bug để tải lại.
+- Service giới hạn tổng attachment trực tiếp của mỗi Bug bằng `BUG_ATTACHMENT_MAX_FILES`, kiểm tra trước upload và kiểm tra lại trong transaction.
+- Tái sử dụng auth/quyền project, same-origin guard, rate limit, Cloudinary và cleanup asset hiện có.
+- Bổ sung nhận diện `.ndjson` ở server kể cả khi browser không gửi MIME chuẩn.
+
+### File chính đã sửa
+
+- `src/components/bugs/bug-form.tsx`
+- `src/features/bugs/actions.ts`
+- `src/features/attachments/service.ts`
+- `src/lib/validators/attachment.ts`
+- `src/app/(dashboard)/bugs/new/page.tsx`
+- `.env.example`, `README.md`, `tests/attachment-validation.test.ts`
+
+### Bug/rủi ro và cách xử lý
+
+- Rủi ro asset mồ côi khi tạo Bug thất bại: giải quyết bằng cách chỉ upload sau khi Server Action trả `bugId`.
+- Upload một phần thất bại: không rollback Bug hoặc file đã thành công; hiển thị từng lỗi và cho tải lại tại detail.
+- Upload Cloudinary thành công nhưng DB lỗi: giữ cleanup trong `createAttachment()`.
+- React effect chạy lại khi trạng thái từng file đổi: khóa orchestration theo `bugId` để không upload trùng trong dev/Strict Mode.
+
+### Cách test
+
+1. Chọn tối đa 5 file hợp lệ, kiểm tra preview ảnh/danh sách và bỏ một file trước submit.
+2. Submit và xác nhận Bug được tạo trước, sau đó mới phát sinh request `/api/uploads` có `bugId`.
+3. Upload thành công phải redirect tới detail và file xuất hiện trong panel Attachments.
+4. Dùng file sai định dạng/quá dung lượng/quá số lượng để xác nhận client và server đều từ chối.
+5. Làm một upload thất bại để xác nhận Bug vẫn tồn tại, file thành công vẫn được gắn và tên file lỗi hiển thị rõ.
+
+### Trạng thái
+
+- Hoàn thành; không có migration database mới.

@@ -1,20 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { requireActiveUser } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { enforceUserMutationLimit } from "@/lib/rate-limit";
 import { assignBugSchema, bugInputSchema, bugUpdateSchema, prioritySchema, severitySchema } from "@/lib/validators/bug";
 import { assignBug, createBug, updateBug, updateBugPriority, updateBugSeverity } from "@/features/bugs/service";
 
-export type BugActionState = { success: boolean; message: string; fieldErrors?: Record<string, string[]> } | undefined;
+export type BugActionState = { success: boolean; message: string; bugId?: string; fieldErrors?: Record<string, string[]> } | undefined;
 const fail = (error: unknown): BugActionState => ({ success: false, message: error instanceof AppError ? error.message : "Unable to complete the request" });
 
 export async function createBugAction(_: BugActionState, formData: FormData): Promise<BugActionState> {
   const actor = await requireActiveUser(); const parsed = bugInputSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { success: false, message: "Check the highlighted fields", fieldErrors: parsed.error.flatten().fieldErrors };
-  let id: string; try { await enforceUserMutationLimit("bug:create", actor.id); id = (await createBug(actor, parsed.data)).id; } catch (error) { return fail(error); } redirect(`/bugs/${id}`);
+  try { await enforceUserMutationLimit("bug:create", actor.id); const bug = await createBug(actor, parsed.data); return { success: true, message: "Đã tạo lỗi. Đang tải tệp đính kèm…", bugId: bug.id }; } catch (error) { return fail(error); }
 }
 
 export async function updateBugAction(bugId: string, _: BugActionState, formData: FormData): Promise<BugActionState> {
