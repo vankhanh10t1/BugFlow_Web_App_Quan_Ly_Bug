@@ -113,6 +113,7 @@ model User {
   fullName             String
   username             String          @unique
   avatarUrl            String?
+  avatarPublicId       String?
   systemRole           SystemRole      @default(TESTER)
   accountStatus        AccountStatus   @default(ACTIVE)
   lastLoginAt          DateTime?

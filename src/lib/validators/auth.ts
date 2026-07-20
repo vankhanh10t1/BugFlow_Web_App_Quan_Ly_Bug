@@ -24,7 +24,6 @@ export const registerSchema = z.object({
 export const updateProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(100),
   username: z.string().trim().toLowerCase().min(3).max(30).regex(/^[a-z0-9_]+$/),
-  avatarUrl: z.union([z.url(), z.literal("")]).optional(),
 });
 
 export const changePasswordSchema = z

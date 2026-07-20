@@ -689,3 +689,25 @@ ALLOWED_ORIGINS="https://app.example.com,https://admin.example.com"
 ```
 
 Không dùng wildcard. Client script/server gọi mutation phải gửi `Origin` hợp lệ hoặc `Sec-Fetch-Site: none`; mutation thiếu cả hai header bị từ chối an toàn. Localhost được cho phép khi Origin và Host khớp nhau.
+
+### Kế hoạch Vercel Firewall/WAF
+
+Danh sách endpoint, baseline rate limit, phạm vi Challenge/IP block và cấu hình theo Hobby/Pro/Enterprise được ghi tại [`bao-cao-vercel-waf.md`](./bao-cao-vercel-waf.md). Các rule này cần được tạo thủ công trong **Vercel Dashboard → Project → Firewall**, bắt đầu bằng action Log rồi mới chuyển sang 429/Challenge sau khi kiểm tra false-positive. Không challenge toàn app, không block quốc gia/IP khi chưa có bằng chứng từ logs và không thay thế auth/role/CSRF/rate limit trong code.
+
+### Upload avatar
+
+Trang `/profile` cho phép chọn trực tiếp ảnh JPG/JPEG/PNG/WEBP từ máy tính, xem trước rồi tải lên Cloudinary. Kích thước mặc định tối đa 5 MB và có thể chỉnh bằng:
+
+```env
+AVATAR_MAX_SIZE_MB="5"
+```
+
+Ảnh được crop vuông 512×512 trong thư mục `bugflow/avatars`. Database lưu `avatarUrl` để hiển thị và `avatarPublicId` để xóa ảnh cũ an toàn khi thay ảnh. Tài khoản mới không cần ảnh hardcode: khi `avatarUrl` là null, UI dùng avatar biểu tượng mặc định nội bộ. Header hiển thị avatar cạnh tên trên desktop và vẫn giữ avatar ở màn hình nhỏ.
+
+Migration cần deploy: `20260720090000_avatar_upload`.
+
+### Đánh giá attachment khi tạo Bug
+
+Schema `Attachment` hỗ trợ đúng một trong hai đích `bugId` hoặc `commentId`. Panel **Attachments** hiện nằm sau khu vực bình luận nhưng gửi `bugId`, vì vậy file tải từ panel này là attachment của Bug, không phải của Comment. Service đã hỗ trợ comment attachment ở tầng dữ liệu, nhưng UI bình luận hiện chưa gửi `commentId`.
+
+Nên bổ sung ảnh/file minh chứng ngay trong form tạo Bug ở một thay đổi tiếp theo vì đây là dữ liệu quan trọng để tái hiện lỗi. Chưa triển khai trong thay đổi avatar này: luồng hiện tại phải tạo Bug trước mới có `bugId`; upload trước có nguy cơ tạo file Cloudinary mồ côi nếu tạo Bug thất bại. Scope khuyến nghị là tạo Bug trước, upload các file đã chọn bằng component/service hiện có với `bugId`, hiển thị kết quả từng file, giữ validation MIME/kích thước/rate limit và dọn file nếu bước ghi database thất bại. Schema hiện tại không cần thay đổi cho scope đó.

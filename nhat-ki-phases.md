@@ -1186,3 +1186,88 @@
 ### Trạng thái
 
 - Hoàn thành; cần cấu hình `ALLOWED_ORIGINS` chỉ khi thật sự có frontend tin cậy khác origin.
+
+---
+
+## Security review — Vercel Firewall/WAF
+
+### Mục tiêu
+
+- Rà soát endpoint thực tế và lập kế hoạch WAF giảm brute force, bot, spam và chi phí Function mà không chặn nhầm flow hợp lệ.
+
+### Đã rà soát
+
+- Xác định login/2FA dùng Server Actions trên các path `/login*`, đăng ký có cả `/register` và `/api/auth/register`, Auth.js dùng `/api/auth/[...nextauth]`.
+- Rà toàn bộ mutation Bug, Comment, Project, Notification, Admin, upload/attachment và cron.
+- Xác nhận project không có resend 2FA, forgot/reset password, debug API hoặc internal API công khai.
+- Đối chiếu lớp bảo vệ hiện có: PostgreSQL rate limit, session/role/ownership, mandatory 2FA, Same-Origin/CSRF và `CRON_SECRET`.
+
+### Rule đề xuất
+
+- Ưu tiên cao: rate limit login/2FA/register; quan sát Auth.js POST; rate limit Admin mutation; bypass Bot Challenge đúng exact path cho Vercel Cron nhưng vẫn giữ secret/quota app.
+- Ưu tiên trung bình: rate limit mutation Bug/Comment/Project và upload; Notification read chỉ cần allow/log mặc định.
+- Bot Protection bắt đầu ở Log, chỉ chuyển Challenge cho auth/admin browser traffic khi có bằng chứng và false-positive thấp.
+- Không block IP/country/ASN tùy tiện; chỉ block theo sự cố có log và ngày xem xét gỡ.
+- Hobby dùng tối đa ba custom rule và một rate-limit rule gộp auth; Pro/Enterprise có thể tách rule. OWASP Core Ruleset chỉ đề xuất cho Enterprise và phải chạy Log trước Deny.
+
+### Việc cần cấu hình thủ công
+
+- Thực hiện tại **Vercel Dashboard → Project → Firewall**; chưa tự động publish rule vì chưa biết plan và chưa có traffic baseline.
+- Theo dõi live traffic rồi chuyển dần Log → 429/Challenge; kiểm thử lại login, mandatory 2FA, register, Admin UI và Vercel Cron sau mỗi thay đổi.
+
+### File liên quan
+
+- `bao-cao-vercel-waf.md`
+- `README.md`
+- `nhat-ki-phases.md`
+
+### Trạng thái
+
+- Hoàn thành báo cáo và kế hoạch. Việc publish rule trên Vercel còn chờ người quản trị project thực hiện thủ công theo plan hiện tại.
+
+---
+
+## Cải tiến hồ sơ — Avatar upload và rà soát Bug attachments
+
+### Mục tiêu
+
+- Thay nhập URL avatar thủ công bằng upload ảnh từ máy tính, cung cấp avatar mặc định và hiển thị avatar trong header.
+- Xác định ý nghĩa, độ cần thiết và phạm vi phù hợp của attachment ngay khi tạo Bug.
+
+### Đã làm
+
+- Giữ `avatarUrl` và bổ sung `avatarPublicId` để quản lý vòng đời asset Cloudinary.
+- Profile dùng file picker JPG/JPEG/PNG/WEBP, preview tại chỗ, trạng thái đang tải/lỗi và giới hạn mặc định 5 MB qua `AVATAR_MAX_SIZE_MB`.
+- Validate MIME, phần mở rộng và kích thước ở server; upload được rate limit 10 lần/phút/user.
+- Cloudinary crop avatar vuông 512×512 trong `bugflow/avatars`; nếu DB update lỗi thì xóa ảnh mới, nếu thành công thì cố gắng xóa ảnh Cloudinary cũ.
+- Tạo `UserAvatar` dùng chung. User có ảnh hiển thị ảnh tải lên; user mới hoặc chưa có ảnh dùng biểu tượng người mặc định, không cần URL hardcode và không tạo broken image.
+- Header hiển thị avatar cạnh tên ở desktop và giữ avatar ở màn hình nhỏ.
+- Register, seed và Admin create không cần sửa dữ liệu: `avatarUrl = null` tự động dùng avatar mặc định.
+
+### Đánh giá attachments khi báo lỗi mới
+
+- `Attachment` có thể gắn với `bugId` hoặc `commentId`. Panel hiện dưới phần bình luận gửi `bugId`, nên đây là attachment của Bug; UI comment hiện chưa upload attachment cho comment.
+- Kết luận: nên cho chọn file minh chứng khi tạo Bug trong task tiếp theo và reuse validator, Cloudinary service, upload API cùng panel hiện có.
+- Chưa implement trong thay đổi này vì Bug phải được tạo trước để có `bugId`. Upload trước khi tạo Bug có rủi ro để lại asset Cloudinary mồ côi khi việc tạo Bug thất bại.
+- Scope đề xuất: tạo Bug trước, upload tuần tự file đã chọn với `bugId`, báo kết quả từng file, giữ whitelist MIME/size/rate limit và cơ chế cleanup. Schema/API lưu attachment hiện tại đã đủ, không cần migration attachment.
+
+### Migration và file chính
+
+- Migration: `prisma/migrations/20260720090000_avatar_upload/migration.sql`.
+- `prisma/schema.prisma`
+- `src/lib/validators/avatar.ts`, `src/lib/cloudinary.ts`
+- `src/features/users/actions.ts`, `src/features/users/service.ts`
+- `src/components/users/user-avatar.tsx`, `src/components/auth/profile-forms.tsx`, `src/components/layout/dashboard-header.tsx`
+- `src/app/(dashboard)/layout.tsx`, `src/app/(dashboard)/profile/page.tsx`
+- `.env.example`, `README.md`, `tests/avatar-validation.test.ts`
+
+### Cách test
+
+1. Chạy `npm run db:deploy`, cấu hình Cloudinary và đăng nhập user chưa có avatar: header/profile phải hiện avatar mặc định.
+2. Chọn ảnh hợp lệ, kiểm tra preview, lưu hồ sơ và xác nhận header hiển thị ảnh mới sau refresh.
+3. Thử GIF/file giả ảnh/file vượt giới hạn: UI hoặc server phải trả lỗi tiếng Việt và không cập nhật avatar.
+4. Thay avatar lần hai và xác nhận DB lưu public ID mới; ảnh cũ được yêu cầu xóa khỏi Cloudinary.
+
+### Trạng thái
+
+- Avatar upload hoàn thành. Attachment trong form tạo Bug mới chỉ được đánh giá và đề xuất scope, chưa triển khai theo đúng yêu cầu rà soát trước.
