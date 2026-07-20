@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import { createAdminUserSchema, adminUserQuerySchema } from "@/lib/validators/admin-user";
 import { createUserByAdmin, listUsers } from "@/features/users/admin-service";
 import { enforceUserMutationLimit } from "@/lib/rate-limit";
+import { assertSameOriginRequest } from "@/lib/request-security";
 
 export async function GET(request: Request) {
   try {
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    assertSameOriginRequest(request);
     const actor = await requireSystemRole(["ADMIN"]);
     const input = createAdminUserSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", input.error.issues[0]?.message ?? "Dữ liệu người dùng không hợp lệ", 400);

@@ -4,10 +4,12 @@ import { AppError } from "@/lib/errors";
 import { updateAdminUserStatusSchema } from "@/lib/validators/admin-user";
 import { changeAccountStatus } from "@/features/users/admin-service";
 import { enforceUserMutationLimit } from "@/lib/rate-limit";
+import { assertSameOriginRequest } from "@/lib/request-security";
 
 type Context = { params: Promise<{ id: string }> };
 export async function PATCH(request: Request, { params }: Context) {
   try {
+    assertSameOriginRequest(request);
     const actor = await requireSystemRole(["ADMIN"]);
     const input = updateAdminUserStatusSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", "Trạng thái tài khoản không hợp lệ", 400);

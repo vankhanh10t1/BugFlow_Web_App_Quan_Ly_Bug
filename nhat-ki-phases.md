@@ -1146,3 +1146,43 @@
 - Test limiter bao phủ quota, HTTP-style 429 error, reset cửa sổ và hash identifier.
 - Test cron xác nhận rate limit chỉ chạy sau khi Bearer secret hợp lệ.
 - Tổng test tại thời điểm triển khai: 66/66 đạt trên 21 test files.
+
+---
+
+## Security hardening — Same-Origin / CSRF Guard
+
+### Mục tiêu
+
+- Ngăn request cross-site/CSRF nhắm vào các Route Handler thay đổi dữ liệu, đồng thời không ảnh hưởng GET chỉ đọc, localhost hoặc deployment sau proxy Vercel.
+
+### Đã làm
+
+- Tạo helper dùng chung `assertSameOriginRequest(request)` tại `src/lib/request-security.ts`.
+- Đối chiếu `Origin` với URL request, `Host` và `X-Forwarded-Host`; kiểm tra `Sec-Fetch-Site` và từ chối `cross-site` không thuộc allowlist.
+- Cho phép các giá trị an toàn `same-origin`, `same-site`, `none`; mutation thiếu cả `Origin` và `Sec-Fetch-Site` bị từ chối an toàn.
+- Hỗ trợ `APP_URL`, `NEXT_PUBLIC_APP_URL`, `AUTH_URL` và danh sách `ALLOWED_ORIGINS` phân tách bằng dấu phẩy; không hardcode domain production.
+- Áp dụng cho đăng ký, Bug, Comment, Project/thành viên, Notification, Admin User, upload và xóa attachment.
+- Giữ GET chỉ đọc không bị chặn. Login/2FA/profile/password dùng Server Actions và dựa trên kiểm tra Origin/Host tích hợp của Next.js; Auth.js giữ cơ chế CSRF riêng. Deadline cron vẫn được bảo vệ bằng `CRON_SECRET`.
+- Response bị chặn trả HTTP `403` với trường `error`: `Yêu cầu không hợp lệ hoặc không cùng nguồn.`; không log cookie, token hoặc secret.
+
+### File chính đã sửa
+
+- `src/lib/request-security.ts`, `src/lib/api-response.ts`
+- Các Route Handler mutation trong `src/app/api/auth`, `bugs`, `comments`, `projects`, `notifications`, `admin`, `uploads` và `attachments`
+- `.env.example`, `README.md`, `tests/request-security.test.ts`
+
+### Cách test
+
+1. Gửi mutation với Origin khớp Host trên localhost và domain production/proxy: request phải đi qua guard.
+2. Gửi mutation với `Origin` khác host và `Sec-Fetch-Site: cross-site`: API phải trả `403` cùng thông báo tiếng Việt.
+3. Gửi mutation thiếu cả Origin và Sec-Fetch-Site: API phải trả `403`.
+4. Khai báo một origin trong `ALLOWED_ORIGINS`: request từ đúng origin đó được phép; origin khác vẫn bị chặn.
+5. GET chỉ đọc tiếp tục hoạt động bình thường.
+
+### Bug gặp phải và cách xử lý
+
+- Không phát sinh bug runtime trong lúc triển khai. Guard xử lý riêng `X-Forwarded-Host` để tránh chặn nhầm deployment Vercel và phục hồi env test đúng cách để các test không làm rò trạng thái sang nhau.
+
+### Trạng thái
+
+- Hoàn thành; cần cấu hình `ALLOWED_ORIGINS` chỉ khi thật sự có frontend tin cậy khác origin.

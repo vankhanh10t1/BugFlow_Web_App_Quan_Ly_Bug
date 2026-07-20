@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import { projectInputSchema, projectQuerySchema } from "@/lib/validators/project";
 import { createProject, listProjects } from "@/features/projects/service";
 import { enforceUserMutationLimit } from "@/lib/rate-limit";
+import { assertSameOriginRequest } from "@/lib/request-security";
 
 export async function GET(request: Request) {
   try {
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    assertSameOriginRequest(request);
     const actor = await requireActiveUser();
     const input = projectInputSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", "Invalid project data", 400);
