@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aiChatSchema } from "@/lib/validators/ai";
-import { chatBulkActionSchema, chatMessageActionSchema, chatMessageSchema, chatReportSchema, chatSettingsSchema, createConversationSchema } from "@/lib/validators/chat";
+import { chatBulkActionSchema, chatMessageActionSchema, chatMessageSchema, chatReactionSchema, chatReportSchema, chatSettingsSchema, createConversationSchema } from "@/lib/validators/chat";
 import { selectChatbotModel } from "@/features/ai/model-selector";
 import { cleanInlineMarkdown, parseAiAnswer } from "@/features/ai/answer-format";
 import { normalizeAiAnswer } from "@/features/ai/response-normalizer";
@@ -80,5 +80,7 @@ describe("chat validation", () => {
     expect(chatSettingsSchema.safeParse({ autoDeleteSeconds: 3_600, hidden: true }).success).toBe(true);
     expect(chatSettingsSchema.safeParse({ autoDeleteSeconds: 30 }).success).toBe(false);
     expect(chatReportSchema.safeParse({ reason: "Nội dung có dấu hiệu quấy rối" }).success).toBe(true);
+    expect(chatReactionSchema.safeParse({ emoji: "👍" }).success).toBe(true);
+    expect(chatReactionSchema.safeParse({ emoji: "<script>" }).success).toBe(false);
   });
 });

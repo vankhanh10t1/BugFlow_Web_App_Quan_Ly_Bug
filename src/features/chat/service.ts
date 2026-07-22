@@ -142,6 +142,7 @@ function messageSelect(actorId: string) {
     attachmentMime: true, attachmentSize: true, attachmentType: true, reminderAt: true,
     pinnedAt: true, recalledAt: true, createdAt: true, editedAt: true,
     sender: { select: userSelect }, marks: { where: { userId: actorId }, select: { id: true } },
+    reactions: { select: { emoji: true, userId: true } },
   } as const;
 }
 
@@ -164,9 +165,20 @@ type MessageRow = {
   pinnedAt: Date | null; recalledAt: Date | null; createdAt: Date; editedAt: Date | null;
   sender: { id: string; fullName: string; username: string; avatarUrl: string | null; systemRole: SystemRole };
   marks: { id: string }[];
+  reactions: { emoji: string; userId: string }[];
 };
 
-function visibleMessage(message: MessageRow) {
+export function summarizeReactions(reactions: { emoji: string; userId: string }[], actorId: string) {
+  const counts = new Map<string, number>();
+  for (const reaction of reactions) counts.set(reaction.emoji, (counts.get(reaction.emoji) ?? 0) + 1);
+  return {
+    reactions: [...counts].map(([emoji, count]) => ({ emoji, count, reactedByMe: reactions.some((item) => item.emoji === emoji && item.userId === actorId) })),
+    myReaction: reactions.find((item) => item.userId === actorId)?.emoji ?? null,
+  };
+}
+
+function visibleMessage(message: MessageRow, actorId: string) {
+  const summary = summarizeReactions(message.reactions, actorId);
   return {
     ...message,
     content: message.recalledAt ? "Tin nhắn đã được thu hồi" : message.content,
@@ -182,6 +194,7 @@ function visibleMessage(message: MessageRow) {
     attachmentSize: message.recalledAt ? null : message.attachmentSize,
     attachmentType: message.recalledAt ? null : message.attachmentType,
     marked: message.marks.length > 0,
+    ...summary,
     marks: undefined,
   };
 }
@@ -202,11 +215,11 @@ export async function listMessages(conversationId: string, actor: ChatActor, opt
   const receipts = await prisma.chatParticipant.findMany({ where: { conversationId, leftAt: null }, select: { userId: true, lastDeliveredAt: true, lastReadAt: true } });
   if (options.after) {
     const rows = await prisma.chatMessage.findMany({ where: { ...where, createdAt: { ...(where.createdAt as Prisma.DateTimeFilter | undefined), gt: options.after } }, select: messageSelect(actor.id), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit });
-    return rows.map((message) => ({ ...visibleMessage(message), deliveryStatus: deliveryStatus(message, actor, receipts) }));
+    return rows.map((message) => ({ ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) }));
   }
   const rows = await prisma.chatMessage.findMany({ where, select: messageSelect(actor.id), orderBy: [{ createdAt: "desc" }, { id: "desc" }], ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}), take: limit + 1 });
   const hasMore = rows.length > limit;
-  const items = rows.slice(0, limit).reverse().map((message) => ({ ...visibleMessage(message), deliveryStatus: deliveryStatus(message, actor, receipts) }));
+  const items = rows.slice(0, limit).reverse().map((message) => ({ ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) }));
   return { items, nextCursor: hasMore ? rows[limit - 1]?.id ?? null : null };
 }
 
@@ -216,7 +229,7 @@ export async function sendMessage(conversationId: string, actor: ChatActor, inpu
   return prisma.$transaction(async (tx) => {
     if (input.clientId) {
       const existing = await tx.chatMessage.findUnique({ where: { conversationId_clientId: { conversationId, clientId: input.clientId } }, select: messageSelect(actor.id) });
-      if (existing) return { ...visibleMessage(existing), deliveryStatus: "SENT" as const };
+      if (existing) return { ...visibleMessage(existing, actor.id), deliveryStatus: "SENT" as const };
     }
     const message = await tx.chatMessage.create({ data: { conversationId, senderId: actor.id, content: input.content, clientId: input.clientId, type: input.type, priority: input.priority, sticker: input.sticker, gifUrl: input.gifUrl, gifPreviewUrl: input.gifPreviewUrl, gifWidth: input.gifWidth, gifHeight: input.gifHeight, gifProvider: input.gifProvider, reminderAt: input.reminderAt }, select: messageSelect(actor.id) });
     await tx.chatConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
@@ -226,7 +239,7 @@ export async function sendMessage(conversationId: string, actor: ChatActor, inpu
       : (await tx.chatParticipant.findMany({ where: { conversationId, userId: { not: actor.id }, leftAt: null, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId);
     const preview = input.type === "STICKER" ? "Đã gửi một sticker" : input.type === "GIF" ? "Đã gửi một GIF" : input.type === "REMINDER" ? `Nhắc hẹn: ${input.content}` : input.content;
     if (recipientIds.length) await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, conversationId, chatMessageId: message.id, type: "CHAT_MESSAGE" as const, title: input.priority === "URGENT" ? "Tin nhắn khẩn cấp" : "Tin nhắn mới", message: preview.slice(0, 120) })) });
-    return { ...visibleMessage(message), deliveryStatus: "SENT" as const };
+    return { ...visibleMessage(message, actor.id), deliveryStatus: "SENT" as const };
   });
 }
 
@@ -249,7 +262,7 @@ export async function sendChatAttachment(conversationId: string, actor: ChatActo
       if (recipientIds.length) await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, conversationId, chatMessageId: created.id, type: "CHAT_MESSAGE" as const, title: priority === "URGENT" ? "Tệp khẩn cấp" : "Tệp mới trong Chat", message: file.name.slice(0, 120) })) });
       return created;
     });
-    return { ...visibleMessage(message), deliveryStatus: "SENT" as const };
+    return { ...visibleMessage(message, actor.id), deliveryStatus: "SENT" as const };
   } catch (error) {
     await deleteAsset(uploaded.publicId, config.resource).catch(() => undefined);
     throw error;
@@ -268,6 +281,38 @@ export async function actOnMessage(conversationId: string, messageId: string, ac
   if (action === "MARK") return prisma.chatMessageMark.upsert({ where: { messageId_userId: { messageId, userId: actor.id } }, create: { messageId, userId: actor.id }, update: {} });
   if (action === "UNMARK") return prisma.chatMessageMark.deleteMany({ where: { messageId, userId: actor.id } });
   return prisma.chatMessageHidden.upsert({ where: { messageId_userId: { messageId, userId: actor.id } }, create: { messageId, userId: actor.id }, update: {} });
+}
+
+async function reactionMessage(messageId: string, actor: ChatActor) {
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: messageId },
+    select: { id: true, conversationId: true, recalledAt: true, deletedAt: true, hiddenFor: { where: { userId: actor.id }, select: { id: true } } },
+  });
+  if (!message || message.deletedAt || message.hiddenFor.length) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy tin nhắn", 404);
+  await context(message.conversationId, actor);
+  if (message.recalledAt) throw new AppError("VALIDATION_ERROR", "Không thể thả cảm xúc vào tin nhắn đã thu hồi", 409);
+  return message;
+}
+
+async function reactionSummary(messageId: string, actorId: string) {
+  const reactions = await prisma.chatMessageReaction.findMany({ where: { messageId }, select: { emoji: true, userId: true } });
+  return summarizeReactions(reactions, actorId);
+}
+
+export async function setMessageReaction(messageId: string, actor: ChatActor, emoji: string) {
+  await reactionMessage(messageId, actor);
+  await prisma.chatMessageReaction.upsert({
+    where: { messageId_userId: { messageId, userId: actor.id } },
+    create: { messageId, userId: actor.id, emoji },
+    update: { emoji },
+  });
+  return reactionSummary(messageId, actor.id);
+}
+
+export async function removeMessageReaction(messageId: string, actor: ChatActor) {
+  await reactionMessage(messageId, actor);
+  await prisma.chatMessageReaction.deleteMany({ where: { messageId, userId: actor.id } });
+  return reactionSummary(messageId, actor.id);
 }
 
 export async function bulkMessageAction(conversationId: string, actor: ChatActor, messageIds: string[], action: "MARK" | "UNMARK" | "DELETE_FOR_ME") {

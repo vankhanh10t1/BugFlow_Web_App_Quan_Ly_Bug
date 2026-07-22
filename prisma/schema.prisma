@@ -165,6 +165,7 @@ model User {
   chatMessagesPinned       ChatMessage[]             @relation("ChatMessagePinnedBy")
   chatMessageMarks         ChatMessageMark[]
   chatMessagesHidden       ChatMessageHidden[]
+  chatMessageReactions     ChatMessageReaction[]
   chatReports              ChatReport[]
 
   @@index([systemRole])
@@ -444,6 +445,7 @@ model ChatMessage {
   notifications  Notification[]
   marks          ChatMessageMark[]
   hiddenFor      ChatMessageHidden[]
+  reactions      ChatMessageReaction[]
 
   @@unique([conversationId, clientId])
   @@index([conversationId, createdAt, id])
@@ -475,6 +477,21 @@ model ChatMessageHidden {
 
   @@unique([messageId, userId])
   @@index([userId, createdAt])
+}
+
+model ChatMessageReaction {
+  id        String      @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
 }
 
 model ChatReport {

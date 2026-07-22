@@ -35,6 +35,10 @@ export const chatMessageActionSchema = z.object({
   action: z.enum(["PIN", "UNPIN", "MARK", "UNMARK", "RECALL", "DELETE_FOR_ME"]),
 });
 
+export const chatReactionSchema = z.object({
+  emoji: z.enum(["👍", "❤️", "😂", "😮", "😢", "😡"], { message: "Cảm xúc không hợp lệ" }),
+});
+
 export const chatBulkActionSchema = z.object({
   action: z.enum(["MARK", "UNMARK", "DELETE_FOR_ME"]),
   messageIds: z.array(z.string().cuid()).min(1).max(100),

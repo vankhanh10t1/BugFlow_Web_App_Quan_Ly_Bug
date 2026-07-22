@@ -1803,6 +1803,8 @@
 - Fix GIF nhấp nháy bằng cách ổn định `fetchGifs`, không remount Grid khi `ResizeObserver` đổi width, dùng `<img>` native cho bubble, memo hóa message và loại optimistic duplicate theo `clientId`.
 - Cải tiến `/docs` thành danh sách hướng dẫn gọn, có tìm kiếm deferred, lọc theo vai trò/chủ đề, sắp xếp A–Z, nội dung thu gọn và sao chép deep link.
 - Thêm hướng dẫn phối hợp theo Admin/Quản lý/Thành viên nhưng giữ đúng phạm vi public docs; không tạo giả model/API/upload tài liệu theo project chưa tồn tại.
+- Thêm emoji reaction cho từng tin nhắn Chat: thả, đổi, bỏ cảm xúc và hiển thị tổng hợp số lượng theo `👍 ❤️ 😂 😮 😢 😡`.
+- Thêm API reaction có auth, quyền hội thoại, same-origin guard, rate limit, validation và cập nhật riêng message trong cache; client khác đồng bộ qua polling hiện có.
 
 ### Bug gặp phải
 
@@ -1822,6 +1824,7 @@
 - Lần build local trong sandbox không tải được Google Fonts; đây là lỗi mạng môi trường kiểm thử, không phải lỗi source hoặc dependency.
 - Windows/browser không có color-flag font thường hiển thị cờ thành hai ký tự regional indicator; GIF dùng `next/image` trong danh sách polling có thể khởi động lại trạng thái ảnh động khi cây render lại.
 - Tên “Tài liệu dự án” dễ bị hiểu là kho file theo từng project, trong khi source/schema thực tế chỉ có `/docs` công khai và attachment thuộc Bug/Comment/Chat.
+- Chat chưa có cấu trúc lưu reaction; việc cập nhật toàn bộ danh sách sau mỗi thao tác có thể làm gián đoạn GIF và trạng thái tin nhắn hiện hữu.
 
 ### Cách xử lý
 
@@ -1850,6 +1853,8 @@
 - Với GIPHY Grid, memo hóa `fetchGifs` bằng `useCallback`, bỏ `gridWidth` khỏi React key và chỉ cập nhật width khi chênh lệch đáng kể để chặn vòng lặp resize → remount → refetch.
 - Giữ page/layout tĩnh ở Server Component, chỉ tách explorer tương tác thành Client Component; dữ liệu hướng dẫn nhỏ được lọc tại client, không thêm API/refetch/N+1 và memo hóa từng card.
 - Giữ URL GIF đã lưu trong DB, dùng `message.id` làm key, memo comparator theo dữ liệu hiển thị và merge server/pending theo `clientId` để polling không remount hoặc duplicate GIF không đổi.
+- Tạo `ChatMessageReaction` với unique `(messageId, userId)`; POST dùng upsert, DELETE chỉ xóa reaction của current user và từ chối tin nhắn ngoài quyền/đã thu hồi.
+- Response trả reaction summary cùng `myReaction`; React Query chỉ thay message tương ứng, tránh reload trang hoặc remount toàn bộ danh sách.
 
 ### File/khu vực liên quan
 
@@ -1884,6 +1889,9 @@
 - `src/components/chat/emoji-mart-picker.tsx`, `package.json`, `package-lock.json`, `README.md`
 - `src/components/chat/chat-workspace.tsx`, `src/components/chat/emoji-mart-picker.tsx`, `tests/chat-workspace-render.test.ts`
 - `src/app/docs/page.tsx`, `src/components/docs/docs-explorer.tsx`, `tests/docs-explorer.test.ts`, `README.md`
+- `prisma/schema.prisma`, `prisma/migrations/20260722170000_chat_message_reactions/migration.sql`
+- `src/app/api/chat/messages/[messageId]/reactions/route.ts`, `src/features/chat/service.ts`, `src/lib/validators/chat.ts`
+- `src/components/chat/chat-workspace.tsx`, `tests/ai-chat-validation.test.ts`, `README.md`
 
 ### Ghi chú
 
@@ -1904,6 +1912,8 @@
 - Xác minh fix cờ/GIF: test riêng cho Việt Nam, Mỹ, Nhật, Hàn, Singapore, emoji thường và optimistic dedup; type-check, ESLint, 28 file test/101 tests cùng production build đều thành công.
 - Không thể kiểm tra trực quan bằng browser automation vì phiên hiện tại không có browser khả dụng; cần xác nhận thêm trên Chrome/Edge Windows sau khi deploy để kiểm tra font được tải qua mạng production.
 - `/docs` vẫn là tài liệu công khai; forbidden/error/upload/delete states không áp dụng vì không có request dữ liệu hay mutation. Kho tài liệu riêng theo project cần một phase schema/API/permission độc lập nếu được phê duyệt sau.
+- Reaction đồng bộ giữa các tài khoản theo polling 4 giây hiện tại; không cần thêm WebSocket/SSE hay dependency mới.
+- Migration `20260722170000_chat_message_reactions` đã áp dụng thành công lên Neon development; Prisma generate, type-check, ESLint, 29 file test/103 tests và production build đều đạt.
 - Xác minh cải tiến `/docs`: type-check, ESLint, 29 file test/103 tests và production build đều thành công; route tiếp tục được prerender tĩnh.
 
 ---
