@@ -1799,8 +1799,8 @@
 - Thay emoji picker thủ công bằng Emoji Mart, lazy-load khi mở và tự đóng sau khi chọn/click ra ngoài.
 - Thêm GIPHY React Components với tìm kiếm/trending GIF, type `GIF`, metadata URL/preview/kích thước/provider và trạng thái thiếu cấu hình an toàn.
 - Fix Vercel `npm install` ERESOLVE bằng cách bỏ `@emoji-mart/react`/`emoji-mart`, giữ `@emoji-mart/data` và thay bằng picker React 19 nhẹ có tìm kiếm, danh mục và tối đa 240 kết quả mỗi lượt.
-- Fix nhóm emoji cờ bằng fallback badge mã quốc gia sạch; giữ nguyên chuỗi regional-indicator khi đọc tin cũ và bổ sung font emoji fallback cho picker/input/message.
-- Fix GIF nhấp nháy bằng `<img>` native, memo hóa từng message bubble và loại optimistic duplicate khi server đã lưu cùng `clientId`.
+- Fix nhóm emoji cờ bằng `country-flag-emoji-polyfill`; picker/input/message giữ nguyên Unicode cờ thật và dùng font `Twemoji Country Flags` trên Windows/Chromium.
+- Fix GIF nhấp nháy bằng cách ổn định `fetchGifs`, không remount Grid khi `ResizeObserver` đổi width, dùng `<img>` native cho bubble, memo hóa message và loại optimistic duplicate theo `clientId`.
 
 ### Bug gặp phải
 
@@ -1843,7 +1843,8 @@
 - Không chạy `npm audit fix --force` vì phương án đề xuất có thể hạ phiên bản Next/GIPHY và phá API hiện tại; giữ validation server, không dùng cookie API của GIPHY picker và ghi nhận để theo dõi bản vá upstream.
 - Gỡ wrapper không tương thích bằng `npm uninstall` thông thường, cập nhật lockfile và chạy lại `npm install` không kèm `--force`/`--legacy-peer-deps`; lệnh hoàn tất thành công và vẫn chạy Prisma postinstall.
 - Chạy lại build với quyền mạng để tải Geist/Geist Mono; ESLint và production build hoàn tất không còn cảnh báo picker.
-- Với flag, không dùng `.split("")`; dùng `Array.from()` theo code point, chuyển cặp regional indicator thành mã `VN/US/JP/KR…` và chọn cờ mới dưới dạng `[XX]` ổn định trên mọi OS.
+- Bỏ hoàn toàn fallback `[XX]`; giữ cặp regional indicator nguyên vẹn và inject font cờ 77 kB chỉ trên browser thiếu native flag support.
+- Với GIPHY Grid, memo hóa `fetchGifs` bằng `useCallback`, bỏ `gridWidth` khỏi React key và chỉ cập nhật width khi chênh lệch đáng kể để chặn vòng lặp resize → remount → refetch.
 - Giữ URL GIF đã lưu trong DB, dùng `message.id` làm key, memo comparator theo dữ liệu hiển thị và merge server/pending theo `clientId` để polling không remount hoặc duplicate GIF không đổi.
 
 ### File/khu vực liên quan
@@ -1895,7 +1896,8 @@
 - GIPHY Web SDK key là biến public được đóng vào client bundle lúc build; thiếu `NEXT_PUBLIC_GIPHY_API_KEY` chỉ vô hiệu hóa nút GIF, không làm crash Chat.
 - Migration `20260722143000_chat_giphy_messages` đã áp dụng thành công lên Neon development đang cấu hình; production build, type-check, ESLint và 28 file test/94 tests đều đạt.
 - Xác minh riêng fix Vercel: `npm install` sạch, type-check, ESLint, 28 file test/94 tests và production build đều thành công; không dùng `--force` hoặc `--legacy-peer-deps` trong luồng cài cuối.
-- Xác minh fix cờ/GIF: test riêng cho Việt Nam, Mỹ, Nhật, Hàn, emoji thường và optimistic dedup; type-check, ESLint, 28 file test/100 tests cùng production build đều thành công.
+- Xác minh fix cờ/GIF: test riêng cho Việt Nam, Mỹ, Nhật, Hàn, Singapore, emoji thường và optimistic dedup; type-check, ESLint, 28 file test/101 tests cùng production build đều thành công.
+- Không thể kiểm tra trực quan bằng browser automation vì phiên hiện tại không có browser khả dụng; cần xác nhận thêm trên Chrome/Edge Windows sau khi deploy để kiểm tra font được tải qua mạng production.
 
 ---
 

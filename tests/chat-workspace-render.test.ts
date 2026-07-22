@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/chat" }));
 
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ChatWorkspace, mergeChatMessages, regionalFlagCode } from "@/components/chat/chat-workspace";
-import { flagCode } from "@/components/chat/emoji-mart-picker";
+import { emojiValue, flagCode } from "@/components/chat/emoji-mart-picker";
 
 describe("chat workspace initialization", () => {
   it("renders the initial loading state without throwing", () => {
@@ -24,10 +24,14 @@ describe("chat emoji flag fallback", () => {
     expect(regionalFlagCode(flag)).toBe(code);
   });
 
-  it("maps Emoji Mart flag ids to a clean country-code fallback", () => {
+  it("recognizes Emoji Mart flag ids without changing ordinary emoji", () => {
     expect(flagCode({ id: "flag-vn", name: "Vietnam Flag", keywords: [], skins: [], version: 1 })).toBe("VN");
     expect(flagCode({ id: "fire", name: "Fire", keywords: [], skins: [], version: 1 })).toBeNull();
     expect(["😀", "❤️", "🔥"].map(regionalFlagCode)).toEqual([null, null, null]);
+  });
+
+  it("keeps the real Singapore flag instead of replacing it with [SG]", () => {
+    expect(emojiValue({ id: "flag-sg", name: "Singapore Flag", keywords: [], skins: [{ unified: "1f1f8-1f1ec", native: "🇸🇬" }], version: 1 })).toBe("🇸🇬");
   });
 
   it("removes an optimistic duplicate after the same clientId is persisted", () => {

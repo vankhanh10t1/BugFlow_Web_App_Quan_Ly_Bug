@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Camera, CheckCheck, CircleEllipsis, Copy, FileUp, Info, Laugh, MessageCirclePlus, MessagesSquare, Pin, Send, ShieldAlert, Star, Trash2, Undo2, X } from "lucide-react";
+import { polyfillCountryFlagEmojis } from "country-flag-emoji-polyfill";
 import type { SelectedGif } from "@/components/chat/giphy-picker";
 
 type User = { id: string; fullName: string; username: string; systemRole: string };
@@ -84,6 +85,10 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [reportReason, setReportReason] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    polyfillCountryFlagEmojis();
+  }, []);
 
   useEffect(() => {
     const closePickers = (event: PointerEvent) => {
@@ -217,7 +222,7 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
           {showReminder ? <div className="mb-2 grid gap-2 rounded-xl bg-blue-50 p-3 sm:grid-cols-2"><input type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm" /><p className="text-xs text-blue-700">Nhắc hẹn được lưu trong hội thoại. Tác vụ gửi thông báo đúng giờ là bước phát triển tiếp theo.</p></div> : null}
           <div className="mb-2 flex flex-wrap items-center gap-1"><ToolButton label="Emoji" onClick={() => { setShowEmoji((value) => !value); setShowGif(false); }}><Laugh /></ToolButton><button type="button" title={giphyApiKey ? "GIF" : "Chưa cấu hình GIPHY"} disabled={!giphyApiKey} onClick={() => { setShowGif((value) => !value); setShowEmoji(false); }} className="h-9 rounded-lg border px-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">GIF</button><ToolButton label="Sticker" onClick={() => setShowSticker((value) => !value)}><CircleEllipsis /></ToolButton><ToolButton label="Ảnh hoặc file" onClick={() => fileInput.current?.click()}><FileUp /></ToolButton><ToolButton label="Chụp màn hình" onClick={() => void captureScreen()}><Camera /></ToolButton><ToolButton label="Nhắc hẹn" onClick={() => setShowReminder((value) => !value)}><BellRing /></ToolButton><select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="ml-auto h-9 rounded-lg border bg-white px-2 text-xs"><option value="NORMAL">Tin thường</option><option value="IMPORTANT">Quan trọng</option><option value="URGENT">Khẩn cấp</option></select><input ref={fileInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,text/plain,.log,.ndjson,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate({ file, clientId: crypto.randomUUID() }); event.currentTarget.value = ""; }} /></div>
           {!giphyApiKey ? <p className="mb-2 text-xs text-amber-700">GIF đang tắt vì chưa cấu hình `NEXT_PUBLIC_GIPHY_API_KEY`.</p> : null}
-          <form onSubmit={(event) => { event.preventDefault(); sendText(); }} className="flex gap-2"><textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} placeholder={showReminder ? "Nội dung nhắc hẹn…" : "Nhập tin nhắn…"} className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm" style={{ fontFamily: 'system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }} /><button disabled={send.isPending || !content.trim() || (showReminder && !reminderAt)} aria-label="Gửi tin nhắn" className="grid w-12 place-items-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="size-4" /></button></form>
+          <form onSubmit={(event) => { event.preventDefault(); sendText(); }} className="flex gap-2"><textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} placeholder={showReminder ? "Nội dung nhắc hẹn…" : "Nhập tin nhắn…"} className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm" style={{ fontFamily: '"Twemoji Country Flags", system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }} /><button disabled={send.isPending || !content.trim() || (showReminder && !reminderAt)} aria-label="Gửi tin nhắn" className="grid w-12 place-items-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="size-4" /></button></form>
           <p className="mt-2 text-[11px] text-slate-400">Chụp màn hình phụ thuộc quyền và bộ chọn nguồn của trình duyệt. Nếu không hỗ trợ, hãy tải ảnh lên thủ công.</p>
         </div> : <p className="border-t bg-amber-50 p-4 text-center text-sm text-amber-800">Bạn có quyền xem nhưng không thể gửi tin nhắn trong dự án này.</p>}
       </> : <div className="grid flex-1 place-items-center p-8 text-center"><div><MessagesSquare className="mx-auto size-10 text-slate-300" /><h2 className="mt-4 font-semibold">Chọn một hội thoại</h2><p className="mt-1 text-sm text-slate-500">Tin nhắn được lưu trong hệ thống và cập nhật bằng polling.</p></div></div>}
@@ -257,8 +262,7 @@ export function regionalFlagCode(flag: string) {
   return points.map((point) => String.fromCharCode(65 + point - 0x1f1e6)).join("");
 }
 function StableMessageText({ text }: { text: string }) {
-  const parts = text.split(/(\p{Regional_Indicator}{2})/gu);
-  return <p className="whitespace-pre-wrap break-words" style={{ fontFamily: 'system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }}>{parts.map((part, index) => { const code = regionalFlagCode(part); return code ? <span key={`${code}-${index}`} title={`Cờ ${code}`} className="mx-0.5 inline-flex rounded border bg-white/90 px-1 py-0.5 align-middle text-[10px] font-bold tracking-wide text-slate-700">{code}</span> : part; })}</p>;
+  return <p className="whitespace-pre-wrap break-words" style={{ fontFamily: '"Twemoji Country Flags", system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }}>{text}</p>;
 }
 function StableGif({ src, width, height }: { src: string; width: number; height: number }) {
   // Native img keeps the animated resource mounted across polling updates; Next/Image state caused visible restarts.
