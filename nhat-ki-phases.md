@@ -1799,6 +1799,8 @@
 - Thay emoji picker thủ công bằng Emoji Mart, lazy-load khi mở và tự đóng sau khi chọn/click ra ngoài.
 - Thêm GIPHY React Components với tìm kiếm/trending GIF, type `GIF`, metadata URL/preview/kích thước/provider và trạng thái thiếu cấu hình an toàn.
 - Fix Vercel `npm install` ERESOLVE bằng cách bỏ `@emoji-mart/react`/`emoji-mart`, giữ `@emoji-mart/data` và thay bằng picker React 19 nhẹ có tìm kiếm, danh mục và tối đa 240 kết quả mỗi lượt.
+- Fix nhóm emoji cờ bằng fallback badge mã quốc gia sạch; giữ nguyên chuỗi regional-indicator khi đọc tin cũ và bổ sung font emoji fallback cho picker/input/message.
+- Fix GIF nhấp nháy bằng `<img>` native, memo hóa từng message bubble và loại optimistic duplicate khi server đã lưu cùng `clientId`.
 
 ### Bug gặp phải
 
@@ -1816,6 +1818,7 @@
 - `npm audit --omit=dev` báo 8 cảnh báo runtime (5 high, 3 moderate), trong đó chuỗi `react-use → js-cookie` và `@giphy/js-util → uuid` đến từ GIPHY; đề xuất tự động hiện tại là downgrade major không phù hợp.
 - Vercel bị chặn vì `@emoji-mart/react@1.1.1` chỉ khai báo peer React 16/17/18 trong khi dự án dùng React 19.2.4; downgrade React không phù hợp với kiến trúc Next.js 16 hiện tại.
 - Lần build local trong sandbox không tải được Google Fonts; đây là lỗi mạng môi trường kiểm thử, không phải lỗi source hoặc dependency.
+- Windows/browser không có color-flag font thường hiển thị cờ thành hai ký tự regional indicator; GIF dùng `next/image` trong danh sách polling có thể khởi động lại trạng thái ảnh động khi cây render lại.
 
 ### Cách xử lý
 
@@ -1840,6 +1843,8 @@
 - Không chạy `npm audit fix --force` vì phương án đề xuất có thể hạ phiên bản Next/GIPHY và phá API hiện tại; giữ validation server, không dùng cookie API của GIPHY picker và ghi nhận để theo dõi bản vá upstream.
 - Gỡ wrapper không tương thích bằng `npm uninstall` thông thường, cập nhật lockfile và chạy lại `npm install` không kèm `--force`/`--legacy-peer-deps`; lệnh hoàn tất thành công và vẫn chạy Prisma postinstall.
 - Chạy lại build với quyền mạng để tải Geist/Geist Mono; ESLint và production build hoàn tất không còn cảnh báo picker.
+- Với flag, không dùng `.split("")`; dùng `Array.from()` theo code point, chuyển cặp regional indicator thành mã `VN/US/JP/KR…` và chọn cờ mới dưới dạng `[XX]` ổn định trên mọi OS.
+- Giữ URL GIF đã lưu trong DB, dùng `message.id` làm key, memo comparator theo dữ liệu hiển thị và merge server/pending theo `clientId` để polling không remount hoặc duplicate GIF không đổi.
 
 ### File/khu vực liên quan
 
@@ -1872,6 +1877,7 @@
 - `prisma/migrations/20260722143000_chat_giphy_messages/migration.sql`
 - `.env.example`, `package.json`, `package-lock.json`
 - `src/components/chat/emoji-mart-picker.tsx`, `package.json`, `package-lock.json`, `README.md`
+- `src/components/chat/chat-workspace.tsx`, `src/components/chat/emoji-mart-picker.tsx`, `tests/chat-workspace-render.test.ts`
 
 ### Ghi chú
 
@@ -1889,6 +1895,7 @@
 - GIPHY Web SDK key là biến public được đóng vào client bundle lúc build; thiếu `NEXT_PUBLIC_GIPHY_API_KEY` chỉ vô hiệu hóa nút GIF, không làm crash Chat.
 - Migration `20260722143000_chat_giphy_messages` đã áp dụng thành công lên Neon development đang cấu hình; production build, type-check, ESLint và 28 file test/94 tests đều đạt.
 - Xác minh riêng fix Vercel: `npm install` sạch, type-check, ESLint, 28 file test/94 tests và production build đều thành công; không dùng `--force` hoặc `--legacy-peer-deps` trong luồng cài cuối.
+- Xác minh fix cờ/GIF: test riêng cho Việt Nam, Mỹ, Nhật, Hàn, emoji thường và optimistic dedup; type-check, ESLint, 28 file test/100 tests cùng production build đều thành công.
 
 ---
 

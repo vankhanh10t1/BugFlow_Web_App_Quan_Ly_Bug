@@ -20,6 +20,11 @@ function searchable(emoji: Emoji) {
   return `${emoji.id} ${emoji.name} ${emoji.keywords.join(" ")}`.toLocaleLowerCase();
 }
 
+export function flagCode(emoji: Emoji) {
+  if (emoji.id === "us" || emoji.id === "gb" || emoji.id === "cn" || emoji.id === "jp" || emoji.id === "kr" || emoji.id === "de" || emoji.id === "fr" || emoji.id === "es" || emoji.id === "it" || emoji.id === "ru") return emoji.id.toUpperCase();
+  return emoji.id.startsWith("flag-") && /^[a-z]{2}$/u.test(emoji.id.slice(5)) ? emoji.id.slice(5).toUpperCase() : null;
+}
+
 export default function EmojiMartPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
   const categories = emojiData.categories.filter((category) => categoryNames[category.id]);
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "people");
@@ -46,7 +51,8 @@ export default function EmojiMartPicker({ onSelect }: { onSelect: (emoji: string
       <div className="grid max-h-72 grid-cols-8 gap-1 overflow-y-auto p-2" aria-label="Emoji">
         {emojis.map((emoji) => {
           const native = emoji.skins[0]?.native;
-          return native ? <button type="button" aria-label={emoji.name} key={emoji.id} onClick={() => onSelect(native)} className="grid aspect-square place-items-center rounded-lg text-xl hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-500">{native}</button> : null;
+          const countryCode = flagCode(emoji);
+          return native ? <button type="button" aria-label={emoji.name} key={emoji.id} onClick={() => onSelect(countryCode ? `[${countryCode}]` : native)} className="grid aspect-square place-items-center rounded-lg text-xl hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-500" style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }}>{countryCode ? <span className="rounded border bg-slate-50 px-1 py-0.5 text-[10px] font-bold tracking-wide text-slate-700">{countryCode}</span> : native}</button> : null;
         })}
       </div>
       {!emojis.length ? <p className="p-4 text-center text-sm text-slate-500">Không tìm thấy emoji phù hợp.</p> : null}
