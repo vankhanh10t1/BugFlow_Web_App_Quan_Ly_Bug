@@ -274,7 +274,7 @@ Trạng thái xác minh gần nhất: 28 test files, 94 tests đạt; Prisma val
 - AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider chính là GroqCloud; API key chỉ được đọc phía server.
 - `/chat` hỗ trợ Project, Direct và Support. Project `VIEWER` chỉ đọc; Direct yêu cầu hai user active có project chung; Support do user mở với Admin.
 - Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Trạng thái gồm Chưa gửi/Đã gửi/Đã nhận/Đã xem; “Đã nhận” được cập nhật khi thiết bị nhận polling hội thoại và “Đã xem” khi hội thoại được mở.
-- Chat dùng Emoji Mart để chọn emoji và GIPHY React Components để tìm/gửi GIF; ngoài ra hỗ trợ sticker, ảnh/video/file Cloudinary, ảnh chụp màn hình theo quyền trình duyệt, nhắc hẹn, mức Quan trọng/Khẩn cấp, ghim/đánh dấu/chọn nhiều/thu hồi/xóa phía tôi và panel Thông tin hội thoại.
+- Chat dùng picker nhẹ tự xây dựng từ `@emoji-mart/data` (tìm kiếm và phân loại emoji, không dùng wrapper React 18) và GIPHY React Components để tìm/gửi GIF; ngoài ra hỗ trợ sticker, ảnh/video/file Cloudinary, ảnh chụp màn hình theo quyền trình duyệt, nhắc hẹn, mức Quan trọng/Khẩn cấp, ghim/đánh dấu/chọn nhiều/thu hồi/xóa phía tôi và panel Thông tin hội thoại.
 - Thiết lập tự ẩn, ẩn trò chuyện và xóa lịch sử đều áp dụng riêng cho người dùng hiện tại; báo xấu được lưu để quản trị xử lý. Cần chạy thêm migration `20260722130000_advanced_chat_features`.
 
 #### Cấu hình GroqCloud
@@ -585,7 +585,7 @@ Latest verified state: 28 test files and 94 passing tests; Prisma validation/gen
 - The dashboard AI launcher supports `GUIDE`, `IMPROVE_BUG`, and `CLASSIFY_BUG`. For Bug context, the client sends only `bugId`; the server loads permitted data after authorization.
 - The AI does not persist transcripts, expose secrets/email/attachment URLs, or mutate application data. GroqCloud is the current provider.
 - `/chat` supports project conversations, direct conversations between active users sharing a project, and Admin support conversations. PostgreSQL stores messages, unread/read/delivery receipts, reminders, message actions, and per-user conversation settings; updates use 4–5 second polling.
-- Project `VIEWER` members are read-only. Chat uses Emoji Mart for emoji selection and GIPHY React Components for GIF search/sending; it also supports stickers, Cloudinary images/video/files, browser-authorized screenshots, important/urgent messages, pin/mark/multi-select/recall/delete-for-me actions, and a conversation-information panel.
+- Project `VIEWER` members are read-only. Chat uses a lightweight searchable/category picker built from `@emoji-mart/data` (without the React-18-only wrapper) and GIPHY React Components for GIF search/sending; it also supports stickers, Cloudinary images/video/files, browser-authorized screenshots, important/urgent messages, pin/mark/multi-select/recall/delete-for-me actions, and a conversation-information panel.
 - Apply migration `20260722130000_advanced_chat_features` after the base AI/chat migration. Presence, typing indicators, and managed realtime are not implemented.
 
 #### GroqCloud configuration

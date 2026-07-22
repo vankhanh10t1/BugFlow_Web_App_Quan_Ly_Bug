@@ -1798,6 +1798,7 @@
 - Thêm schema, migration, API có auth/ACL/same-origin/rate limit và validator cho các tính năng Chat nâng cao.
 - Thay emoji picker thủ công bằng Emoji Mart, lazy-load khi mở và tự đóng sau khi chọn/click ra ngoài.
 - Thêm GIPHY React Components với tìm kiếm/trending GIF, type `GIF`, metadata URL/preview/kích thước/provider và trạng thái thiếu cấu hình an toàn.
+- Fix Vercel `npm install` ERESOLVE bằng cách bỏ `@emoji-mart/react`/`emoji-mart`, giữ `@emoji-mart/data` và thay bằng picker React 19 nhẹ có tìm kiếm, danh mục và tối đa 240 kết quả mỗi lượt.
 
 ### Bug gặp phải
 
@@ -1813,6 +1814,8 @@
 - React lint không cho callback render gián tiếp đọc `fileInput.current` trong thao tác gửi lại attachment.
 - Lần cài package đầu tiên bị npm chặn do `@emoji-mart/react` chưa khai báo peer React 19; production build đầu tiên tiếp tục báo thiếu peer `emoji-mart` và `styled-components`.
 - `npm audit --omit=dev` báo 8 cảnh báo runtime (5 high, 3 moderate), trong đó chuỗi `react-use → js-cookie` và `@giphy/js-util → uuid` đến từ GIPHY; đề xuất tự động hiện tại là downgrade major không phù hợp.
+- Vercel bị chặn vì `@emoji-mart/react@1.1.1` chỉ khai báo peer React 16/17/18 trong khi dự án dùng React 19.2.4; downgrade React không phù hợp với kiến trúc Next.js 16 hiện tại.
+- Lần build local trong sandbox không tải được Google Fonts; đây là lỗi mạng môi trường kiểm thử, không phải lỗi source hoặc dependency.
 
 ### Cách xử lý
 
@@ -1835,6 +1838,8 @@
 - Cài picker bằng legacy peer resolution, bổ sung hai peer dependency bắt buộc rồi xác minh trực tiếp bằng Turbopack production build.
 - Lazy-load hai picker trong Client Component; server chỉ chấp nhận GIF HTTPS từ `giphy.com`/subdomain, provider `GIPHY` và kích thước hữu hạn.
 - Không chạy `npm audit fix --force` vì phương án đề xuất có thể hạ phiên bản Next/GIPHY và phá API hiện tại; giữ validation server, không dùng cookie API của GIPHY picker và ghi nhận để theo dõi bản vá upstream.
+- Gỡ wrapper không tương thích bằng `npm uninstall` thông thường, cập nhật lockfile và chạy lại `npm install` không kèm `--force`/`--legacy-peer-deps`; lệnh hoàn tất thành công và vẫn chạy Prisma postinstall.
+- Chạy lại build với quyền mạng để tải Geist/Geist Mono; ESLint và production build hoàn tất không còn cảnh báo picker.
 
 ### File/khu vực liên quan
 
@@ -1866,6 +1871,7 @@
 - `src/components/chat/emoji-mart-picker.tsx`, `src/components/chat/giphy-picker.tsx`
 - `prisma/migrations/20260722143000_chat_giphy_messages/migration.sql`
 - `.env.example`, `package.json`, `package-lock.json`
+- `src/components/chat/emoji-mart-picker.tsx`, `package.json`, `package-lock.json`, `README.md`
 
 ### Ghi chú
 
@@ -1882,6 +1888,7 @@
 - Migration `20260722130000_advanced_chat_features` đã áp dụng thành công lên Neon development đang cấu hình; Prisma generate, type-check, ESLint, 28 file test với 94 tests và production build đều thành công.
 - GIPHY Web SDK key là biến public được đóng vào client bundle lúc build; thiếu `NEXT_PUBLIC_GIPHY_API_KEY` chỉ vô hiệu hóa nút GIF, không làm crash Chat.
 - Migration `20260722143000_chat_giphy_messages` đã áp dụng thành công lên Neon development đang cấu hình; production build, type-check, ESLint và 28 file test/94 tests đều đạt.
+- Xác minh riêng fix Vercel: `npm install` sạch, type-check, ESLint, 28 file test/94 tests và production build đều thành công; không dùng `--force` hoặc `--legacy-peer-deps` trong luồng cài cuối.
 
 ---
 
