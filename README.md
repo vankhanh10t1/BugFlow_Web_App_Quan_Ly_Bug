@@ -255,7 +255,7 @@ npm run type-check
 npm run build
 ```
 
-Trạng thái xác minh gần nhất: 27 test files, 92 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
+Trạng thái xác minh gần nhất: 28 test files, 93 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
 
 ### Deploy lên Vercel
 
@@ -557,7 +557,7 @@ npm run type-check
 npm run build
 ```
 
-Latest verified state: 27 test files and 92 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
+Latest verified state: 28 test files and 93 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
 
 ### Deploying to Vercel
 

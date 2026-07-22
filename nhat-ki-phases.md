@@ -1790,6 +1790,8 @@
 - Đồng bộ quyền ADMIN: có thể chọn mọi dự án chưa lưu trữ để mở chat dự án; không hiển thị lựa chọn Direct/Support mà service không cho phép ADMIN khởi tạo.
 - Thay initialization phía server của `ChatPage` bằng API hợp nhất `/api/chat/init`, trả current user, conversations và candidates trong một response có kiểm soát.
 - Bổ sung test server-render và route initialization cho cả ADMIN/TESTER, bao gồm trường hợp chưa có hội thoại và thiếu schema.
+- Đồng bộ contract cache `['chat', 'conversations']`: `ChatBadge` chỉ lưu mảng conversation giống `ChatWorkspace`, không lưu toàn bộ API envelope.
+- Thêm phòng vệ `Array.isArray()` trong workspace để cache cũ/sai shape không thể làm sập `.find()` hoặc `.map()`.
 
 ### Bug gặp phải
 
@@ -1799,8 +1801,8 @@
 - Sau khi bổ sung ngày cho mục SSL, nhật kí tạm có hai nhóm `Ngày 20/07/2026` riêng biệt.
 - Trang Chat hiển thị error boundary chung với thông báo database mơ hồ; API chat không log bước lỗi và không phân biệt schema chưa migrate với lỗi server khác.
 - API ứng viên trả danh sách dự án rỗng cho ADMIN dù service cho phép ADMIN tạo chat dự án.
-- Sau bản sửa đầu, route vẫn có thể rơi vào error boundary trước khi API chat chạy vì `ChatPage` gọi lại `requirePageUser()` trong khi dashboard layout đã thực hiện auth guard.
-- Nút retry của error boundary chỉ render lại cùng server page initialization nên tiếp tục gặp exception trước khi React Query có thể refetch dữ liệu.
+- Root cause cuối cùng: `ChatBadge` và `ChatWorkspace` dùng chung query key `['chat', 'conversations']` nhưng badge cache API envelope `{ success, data }`, còn workspace kỳ vọng trực tiếp `Conversation[]`.
+- Khi vào `/chat`, workspace nhận object từ cache rồi gọi `.find()`/`.map()`, gây client render exception cho mọi role. Retry giữ nguyên cache sai shape nên lỗi lặp lại.
 
 ### Cách xử lý
 
@@ -1816,6 +1818,7 @@
 - Bỏ lần tải current user trùng trong `ChatPage`; giữ auth bắt buộc tại dashboard layout và thực hiện auth/role check lại trong `/api/chat/init`.
 - Retry trong workspace gọi `init.refetch()`, chuyển sang loading trong lúc thử lại và thay dữ liệu lỗi bằng response mới khi API phục hồi.
 - API init log lỗi bất ngờ bằng nhãn `[chat:init] failed` cùng `userId`, role, step và message an toàn.
+- Sửa loader của badge trả trực tiếp `body.data`; bổ sung regression test xác nhận dữ liệu cache là array và giữ guard tại nơi sử dụng.
 
 ### File/khu vực liên quan
 
@@ -1835,8 +1838,10 @@
 - `src/app/api/chat/init/route.ts`
 - `src/app/(dashboard)/chat/page.tsx`, `loading.tsx`, `error.tsx`
 - `src/components/chat/chat-workspace.tsx`
+- `src/components/chat/chat-badge.tsx`
 - `tests/chat-service.test.ts`
 - `tests/chat-init-route.test.ts`, `tests/chat-workspace-render.test.ts`
+- `tests/chat-query-cache.test.ts`
 
 ### Ghi chú
 
@@ -1847,7 +1852,7 @@
 - Kiểm thử trình duyệt local không thực hiện được vì môi trường terminal không giữ tiến trình dev nền; semantic HTML, wrapping classes và XSS escaping đã được xác minh bằng test React.
 - Migration Neon đang cấu hình hiện `up to date`. Production/Preview dùng database khác vẫn phải chạy `npm run db:deploy` rồi redeploy Vercel.
 - Chẩn đoán query thật: ADMIN tải được empty conversation hợp lệ; TESTER tải được 3 dự án, 4 người dùng trực tiếp và 2 Admin. Sau sửa, ADMIN có danh sách dự án phù hợp.
-- Type-check, ESLint, 27 test files với 92 tests và production build đều thành công sau bản sửa Chat initialization.
+- Type-check, ESLint, 28 test files với 93 tests và production build đều thành công sau khi sửa query-cache collision.
 
 ---
 
