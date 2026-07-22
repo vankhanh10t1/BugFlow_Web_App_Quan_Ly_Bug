@@ -9,6 +9,7 @@ type Conversation = { id: string; type: "PROJECT" | "DIRECT" | "SUPPORT"; displa
 type Message = { id: string; content: string; createdAt: string; sender: User };
 type Envelope<T> = { success: boolean; message: string; data: T };
 type Candidates = { projects: { id: string; code: string; name: string }[]; directUsers: User[]; admins: User[] };
+type ChatInit = { currentUser: { id: string; systemRole: string }; conversations: Conversation[]; candidates: Candidates };
 
 class ChatRequestError extends Error {
   constructor(message: string, public readonly status: number) { super(message); this.name = "ChatRequestError"; }
@@ -22,14 +23,27 @@ async function json<T>(url: string, init?: RequestInit) {
   return body.data;
 }
 
-function loadError(error: unknown, resource: "hội thoại" | "tin nhắn" | "danh sách người dùng") {
+function loadError(error: unknown, resource: "hội thoại" | "tin nhắn" | "danh sách người dùng" | "dữ liệu Chat") {
   if (error instanceof ChatRequestError && error.status === 401) return "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.";
   if (error instanceof ChatRequestError && error.status === 403) return "Bạn không có quyền truy cập tính năng chat.";
   if (error instanceof ChatRequestError && error.status >= 500) return error.message;
   return `Không thể tải ${resource}. Vui lòng thử lại.`;
 }
 
-export function ChatWorkspace({ currentUserId, currentUserRole, initialConversationId }: { currentUserId: string; currentUserRole: string; initialConversationId?: string }) {
+export function ChatWorkspace({ initialConversationId }: { initialConversationId?: string }) {
+  const init = useQuery({ queryKey: ["chat", "init"], queryFn: () => json<ChatInit>("/api/chat/init"), retry: false });
+  if (init.isPending || (init.isError && init.isFetching)) return <div className="grid min-h-[70vh] place-items-center rounded-2xl border bg-white"><p className="text-sm text-slate-500">Đang khởi tạo Chat…</p></div>;
+  if (init.isError) return <div className="grid min-h-[70vh] place-items-center rounded-2xl border bg-white p-6"><div className="max-w-md text-center"><h2 className="font-semibold">Không thể khởi tạo Chat</h2><p className="mt-2 text-sm text-red-700">{loadError(init.error, "dữ liệu Chat")}</p><button type="button" onClick={() => void init.refetch()} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Thử lại</button></div></div>;
+  return <ChatWorkspaceReady
+    currentUserId={init.data.currentUser.id}
+    currentUserRole={init.data.currentUser.systemRole}
+    initialConversationId={initialConversationId}
+    initialConversations={init.data.conversations}
+    initialCandidates={init.data.candidates}
+  />;
+}
+
+function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversationId, initialConversations, initialCandidates }: { currentUserId: string; currentUserRole: string; initialConversationId?: string; initialConversations: Conversation[]; initialCandidates: Candidates }) {
   const client = useQueryClient();
   const [selectedId, setSelectedId] = useState(initialConversationId ?? "");
   const [showCreate, setShowCreate] = useState(false);
@@ -38,8 +52,8 @@ export function ChatWorkspace({ currentUserId, currentUserRole, initialConversat
   const [content, setContent] = useState("");
   const [notice, setNotice] = useState("");
 
-  const conversations = useQuery({ queryKey: ["chat", "conversations"], queryFn: () => json<Conversation[]>("/api/conversations"), refetchInterval: 5_000 });
-  const candidates = useQuery({ queryKey: ["chat", "candidates"], queryFn: () => json<Candidates>("/api/chat/candidates") });
+  const conversations = useQuery({ queryKey: ["chat", "conversations"], queryFn: () => json<Conversation[]>("/api/conversations"), initialData: initialConversations, refetchInterval: 5_000 });
+  const candidates = useQuery({ queryKey: ["chat", "candidates"], queryFn: () => json<Candidates>("/api/chat/candidates"), initialData: initialCandidates });
   const activeId = selectedId || conversations.data?.[0]?.id || "";
   const messages = useQuery({ queryKey: ["chat", "messages", activeId], enabled: Boolean(activeId), queryFn: () => json<{ items: Message[]; nextCursor: string | null }>(`/api/conversations/${activeId}/messages?limit=50`), refetchInterval: 4_000 });
   useEffect(() => {

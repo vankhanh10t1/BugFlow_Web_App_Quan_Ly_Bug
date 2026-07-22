@@ -1788,6 +1788,8 @@
 - Gộp nội dung cảnh báo SSL vào nhóm ngày 20/07/2026 và loại bỏ heading ngày bị trùng.
 - Sửa luồng tải trang Chat cho ADMIN/TESTER, bổ sung phân loại lỗi API, logging an toàn và trạng thái loading/error/empty riêng.
 - Đồng bộ quyền ADMIN: có thể chọn mọi dự án chưa lưu trữ để mở chat dự án; không hiển thị lựa chọn Direct/Support mà service không cho phép ADMIN khởi tạo.
+- Thay initialization phía server của `ChatPage` bằng API hợp nhất `/api/chat/init`, trả current user, conversations và candidates trong một response có kiểm soát.
+- Bổ sung test server-render và route initialization cho cả ADMIN/TESTER, bao gồm trường hợp chưa có hội thoại và thiếu schema.
 
 ### Bug gặp phải
 
@@ -1797,6 +1799,8 @@
 - Sau khi bổ sung ngày cho mục SSL, nhật kí tạm có hai nhóm `Ngày 20/07/2026` riêng biệt.
 - Trang Chat hiển thị error boundary chung với thông báo database mơ hồ; API chat không log bước lỗi và không phân biệt schema chưa migrate với lỗi server khác.
 - API ứng viên trả danh sách dự án rỗng cho ADMIN dù service cho phép ADMIN tạo chat dự án.
+- Sau bản sửa đầu, route vẫn có thể rơi vào error boundary trước khi API chat chạy vì `ChatPage` gọi lại `requirePageUser()` trong khi dashboard layout đã thực hiện auth guard.
+- Nút retry của error boundary chỉ render lại cùng server page initialization nên tiếp tục gặp exception trước khi React Query có thể refetch dữ liệu.
 
 ### Cách xử lý
 
@@ -1809,6 +1813,9 @@
 - Thêm `chatApiError()` để giữ nguyên 401/403, trả 503 khi Prisma báo thiếu bảng/cột (`P2021`/`P2022`), trả 500 thân thiện cho lỗi không xác định và log ngữ cảnh an toàn.
 - Bổ sung retry, loading, câu `Chưa có cuộc trò chuyện`, thông báo không có quyền và error boundary tiếng Việt riêng cho `/chat`.
 - Kiểm tra database thật: 6 migration đã được áp dụng; query ADMIN/TESTER đều thành công. Không cần migration mới.
+- Bỏ lần tải current user trùng trong `ChatPage`; giữ auth bắt buộc tại dashboard layout và thực hiện auth/role check lại trong `/api/chat/init`.
+- Retry trong workspace gọi `init.refetch()`, chuyển sang loading trong lúc thử lại và thay dữ liệu lỗi bằng response mới khi API phục hồi.
+- API init log lỗi bất ngờ bằng nhãn `[chat:init] failed` cùng `userId`, role, step và message an toàn.
 
 ### File/khu vực liên quan
 
@@ -1825,9 +1832,11 @@
 - `nhat-ki-phases.md` — cập nhật phân nhóm ngày của mục SSL.
 - `src/features/chat/service.ts`, `src/features/chat/api-error.ts`
 - `src/app/api/chat/candidates/route.ts`, `src/app/api/conversations/**`
+- `src/app/api/chat/init/route.ts`
 - `src/app/(dashboard)/chat/page.tsx`, `loading.tsx`, `error.tsx`
 - `src/components/chat/chat-workspace.tsx`
 - `tests/chat-service.test.ts`
+- `tests/chat-init-route.test.ts`, `tests/chat-workspace-render.test.ts`
 
 ### Ghi chú
 
@@ -1838,7 +1847,7 @@
 - Kiểm thử trình duyệt local không thực hiện được vì môi trường terminal không giữ tiến trình dev nền; semantic HTML, wrapping classes và XSS escaping đã được xác minh bằng test React.
 - Migration Neon đang cấu hình hiện `up to date`. Production/Preview dùng database khác vẫn phải chạy `npm run db:deploy` rồi redeploy Vercel.
 - Chẩn đoán query thật: ADMIN tải được empty conversation hợp lệ; TESTER tải được 3 dự án, 4 người dùng trực tiếp và 2 Admin. Sau sửa, ADMIN có danh sách dự án phù hợp.
-- Type-check, ESLint, 25 test files với 88 tests và production build đều thành công sau bản sửa Chat.
+- Type-check, ESLint, 27 test files với 92 tests và production build đều thành công sau bản sửa Chat initialization.
 
 ---
 

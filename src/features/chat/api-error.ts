@@ -3,17 +3,17 @@ import { apiError } from "@/lib/api-response";
 import { AppError } from "@/lib/errors";
 import type { ChatActor } from "@/features/chat/service";
 
-type ChatFailureContext = { actor?: ChatActor | null; step: string };
+type ChatFailureContext = { actor?: ChatActor | null; step: string; event?: string };
 
 function databaseCode(error: unknown) {
   if (!error || typeof error !== "object" || !("code" in error)) return undefined;
   return typeof error.code === "string" ? error.code : undefined;
 }
 
-export function chatApiError(error: unknown, { actor, step }: ChatFailureContext) {
+export function chatApiError(error: unknown, { actor, step, event }: ChatFailureContext) {
   if (error instanceof AppError) return apiError(error);
 
-  console.error("[chat] request failed", {
+  console.error(event ?? "[chat] request failed", {
     userId: actor?.id ?? null,
     role: actor?.systemRole ?? null,
     step,
