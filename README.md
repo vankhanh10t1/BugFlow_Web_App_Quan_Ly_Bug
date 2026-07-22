@@ -93,7 +93,7 @@ Quyền được kiểm tra trong service layer. Việc ẩn nút trên UI khôn
 | `/admin/users` | Quản lý người dùng dành cho Admin |
 | `/notifications` | Danh sách và trạng thái đã đọc của thông báo |
 | `/chat` | Chat dự án, chat trực tiếp và kênh hỗ trợ Admin |
-| `/docs` | Tài liệu công khai trong ứng dụng |
+| `/docs` | Tài liệu công khai có tìm kiếm, lọc theo vai trò/chủ đề, mục thu gọn và liên kết chia sẻ |
 
 Các API chính nằm dưới `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads`, `/api/attachments`, `/api/ai/chat` và `/api/conversations`.
 
@@ -405,7 +405,7 @@ Permissions are enforced in the service layer. Hiding a UI control is never trea
 | `/admin/users` | Admin-only user management |
 | `/notifications` | Notifications and read status |
 | `/chat` | Project, direct, and Admin-support chat |
-| `/docs` | In-app public documentation |
+| `/docs` | Public guides with search, role/topic filters, compact sections, and shareable links |
 
 Primary APIs are exposed under `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads`, `/api/attachments`, `/api/ai/chat`, and `/api/conversations`.
 

@@ -1801,6 +1801,8 @@
 - Fix Vercel `npm install` ERESOLVE bằng cách bỏ `@emoji-mart/react`/`emoji-mart`, giữ `@emoji-mart/data` và thay bằng picker React 19 nhẹ có tìm kiếm, danh mục và tối đa 240 kết quả mỗi lượt.
 - Fix nhóm emoji cờ bằng `country-flag-emoji-polyfill`; picker/input/message giữ nguyên Unicode cờ thật và dùng font `Twemoji Country Flags` trên Windows/Chromium.
 - Fix GIF nhấp nháy bằng cách ổn định `fetchGifs`, không remount Grid khi `ResizeObserver` đổi width, dùng `<img>` native cho bubble, memo hóa message và loại optimistic duplicate theo `clientId`.
+- Cải tiến `/docs` thành danh sách hướng dẫn gọn, có tìm kiếm deferred, lọc theo vai trò/chủ đề, sắp xếp A–Z, nội dung thu gọn và sao chép deep link.
+- Thêm hướng dẫn phối hợp theo Admin/Quản lý/Thành viên nhưng giữ đúng phạm vi public docs; không tạo giả model/API/upload tài liệu theo project chưa tồn tại.
 
 ### Bug gặp phải
 
@@ -1819,6 +1821,7 @@
 - Vercel bị chặn vì `@emoji-mart/react@1.1.1` chỉ khai báo peer React 16/17/18 trong khi dự án dùng React 19.2.4; downgrade React không phù hợp với kiến trúc Next.js 16 hiện tại.
 - Lần build local trong sandbox không tải được Google Fonts; đây là lỗi mạng môi trường kiểm thử, không phải lỗi source hoặc dependency.
 - Windows/browser không có color-flag font thường hiển thị cờ thành hai ký tự regional indicator; GIF dùng `next/image` trong danh sách polling có thể khởi động lại trạng thái ảnh động khi cây render lại.
+- Tên “Tài liệu dự án” dễ bị hiểu là kho file theo từng project, trong khi source/schema thực tế chỉ có `/docs` công khai và attachment thuộc Bug/Comment/Chat.
 
 ### Cách xử lý
 
@@ -1845,6 +1848,7 @@
 - Chạy lại build với quyền mạng để tải Geist/Geist Mono; ESLint và production build hoàn tất không còn cảnh báo picker.
 - Bỏ hoàn toàn fallback `[XX]`; giữ cặp regional indicator nguyên vẹn và inject font cờ 77 kB chỉ trên browser thiếu native flag support.
 - Với GIPHY Grid, memo hóa `fetchGifs` bằng `useCallback`, bỏ `gridWidth` khỏi React key và chỉ cập nhật width khi chênh lệch đáng kể để chặn vòng lặp resize → remount → refetch.
+- Giữ page/layout tĩnh ở Server Component, chỉ tách explorer tương tác thành Client Component; dữ liệu hướng dẫn nhỏ được lọc tại client, không thêm API/refetch/N+1 và memo hóa từng card.
 - Giữ URL GIF đã lưu trong DB, dùng `message.id` làm key, memo comparator theo dữ liệu hiển thị và merge server/pending theo `clientId` để polling không remount hoặc duplicate GIF không đổi.
 
 ### File/khu vực liên quan
@@ -1879,6 +1883,7 @@
 - `.env.example`, `package.json`, `package-lock.json`
 - `src/components/chat/emoji-mart-picker.tsx`, `package.json`, `package-lock.json`, `README.md`
 - `src/components/chat/chat-workspace.tsx`, `src/components/chat/emoji-mart-picker.tsx`, `tests/chat-workspace-render.test.ts`
+- `src/app/docs/page.tsx`, `src/components/docs/docs-explorer.tsx`, `tests/docs-explorer.test.ts`, `README.md`
 
 ### Ghi chú
 
@@ -1898,6 +1903,8 @@
 - Xác minh riêng fix Vercel: `npm install` sạch, type-check, ESLint, 28 file test/94 tests và production build đều thành công; không dùng `--force` hoặc `--legacy-peer-deps` trong luồng cài cuối.
 - Xác minh fix cờ/GIF: test riêng cho Việt Nam, Mỹ, Nhật, Hàn, Singapore, emoji thường và optimistic dedup; type-check, ESLint, 28 file test/101 tests cùng production build đều thành công.
 - Không thể kiểm tra trực quan bằng browser automation vì phiên hiện tại không có browser khả dụng; cần xác nhận thêm trên Chrome/Edge Windows sau khi deploy để kiểm tra font được tải qua mạng production.
+- `/docs` vẫn là tài liệu công khai; forbidden/error/upload/delete states không áp dụng vì không có request dữ liệu hay mutation. Kho tài liệu riêng theo project cần một phase schema/API/permission độc lập nếu được phê duyệt sau.
+- Xác minh cải tiến `/docs`: type-check, ESLint, 29 file test/103 tests và production build đều thành công; route tiếp tục được prerender tĩnh.
 
 ---
 
