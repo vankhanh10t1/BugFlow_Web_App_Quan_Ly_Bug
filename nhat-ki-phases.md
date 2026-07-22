@@ -1792,6 +1792,10 @@
 - Bổ sung test server-render và route initialization cho cả ADMIN/TESTER, bao gồm trường hợp chưa có hội thoại và thiếu schema.
 - Đồng bộ contract cache `['chat', 'conversations']`: `ChatBadge` chỉ lưu mảng conversation giống `ChatWorkspace`, không lưu toàn bộ API envelope.
 - Thêm phòng vệ `Array.isArray()` trong workspace để cache cũ/sai shape không thể làm sập `.find()` hoặc `.map()`.
+- Nâng cấp Chat với trạng thái Chưa gửi/Đã gửi/Đã nhận/Đã xem, retry khi gửi lỗi và receipt dựa trên lần polling/mở hội thoại của người nhận.
+- Bổ sung emoji, sticker, ảnh/video/file Cloudinary, chụp màn hình theo quyền trình duyệt, nhắc hẹn và nhãn Quan trọng/Khẩn cấp.
+- Bổ sung copy, ghim, đánh dấu, chọn nhiều, thu hồi, xóa phía tôi và panel Thông tin hội thoại gồm media/file/link/nhắc hẹn/thiết lập riêng tư/báo xấu.
+- Thêm schema, migration, API có auth/ACL/same-origin/rate limit và validator cho các tính năng Chat nâng cao.
 
 ### Bug gặp phải
 
@@ -1803,6 +1807,8 @@
 - API ứng viên trả danh sách dự án rỗng cho ADMIN dù service cho phép ADMIN tạo chat dự án.
 - Root cause cuối cùng: `ChatBadge` và `ChatWorkspace` dùng chung query key `['chat', 'conversations']` nhưng badge cache API envelope `{ success, data }`, còn workspace kỳ vọng trực tiếp `Conversation[]`.
 - Khi vào `/chat`, workspace nhận object từ cache rồi gọi `.find()`/`.map()`, gây client render exception cho mọi role. Retry giữ nguyên cache sai shape nên lỗi lặp lại.
+- Kiểu trạng thái UI ban đầu chỉ nhận trạng thái server nên TypeScript từ chối hai trạng thái lạc quan `UNSENT` và `FAILED`.
+- React lint không cho callback render gián tiếp đọc `fileInput.current` trong thao tác gửi lại attachment.
 
 ### Cách xử lý
 
@@ -1819,6 +1825,9 @@
 - Retry trong workspace gọi `init.refetch()`, chuyển sang loading trong lúc thử lại và thay dữ liệu lỗi bằng response mới khi API phục hồi.
 - API init log lỗi bất ngờ bằng nhãn `[chat:init] failed` cùng `userId`, role, step và message an toàn.
 - Sửa loader của badge trả trực tiếp `body.data`; bổ sung regression test xác nhận dữ liệu cache là array và giữ guard tại nơi sử dụng.
+- Mở rộng kiểu delivery ở UI, tách retry attachment thành hướng dẫn chọn lại tệp và giữ truy cập ref trực tiếp trong event handler.
+- Tái sử dụng validator/upload Cloudinary hiện có; cleanup asset nếu transaction ghi Chat thất bại và tạo notification cho người nhận sau khi lưu thành công.
+- Dùng soft-state theo từng participant/message cho tự ẩn, ẩn trò chuyện, xóa lịch sử và xóa phía tôi; thu hồi vẫn hiển thị trạng thái cho mọi participant.
 
 ### File/khu vực liên quan
 
@@ -1842,6 +1851,11 @@
 - `tests/chat-service.test.ts`
 - `tests/chat-init-route.test.ts`, `tests/chat-workspace-render.test.ts`
 - `tests/chat-query-cache.test.ts`
+- `prisma/schema.prisma`, `prisma/migrations/20260722130000_advanced_chat_features/migration.sql`
+- `src/lib/validators/chat.ts`
+- `src/app/api/conversations/[conversationId]/attachments`, `info`, `messages/[messageId]`, `messages/bulk`, `settings`, `report`
+- `src/features/chat/service.ts`, `src/components/chat/chat-workspace.tsx`
+- `tests/ai-chat-validation.test.ts`, `README.md`
 
 ### Ghi chú
 
@@ -1853,6 +1867,9 @@
 - Migration Neon đang cấu hình hiện `up to date`. Production/Preview dùng database khác vẫn phải chạy `npm run db:deploy` rồi redeploy Vercel.
 - Chẩn đoán query thật: ADMIN tải được empty conversation hợp lệ; TESTER tải được 3 dự án, 4 người dùng trực tiếp và 2 Admin. Sau sửa, ADMIN có danh sách dự án phù hợp.
 - Type-check, ESLint, 28 test files với 93 tests và production build đều thành công sau khi sửa query-cache collision.
+- Chat nâng cao vẫn dùng polling 4–5 giây để phù hợp Vercel serverless. Presence và typing indicator chưa triển khai.
+- Nhắc hẹn đã được lưu/xem nhưng scheduler gửi notification đúng giờ là TODO; chụp màn hình phụ thuộc bộ chọn nguồn và quyền của trình duyệt, có fallback upload ảnh.
+- Migration `20260722130000_advanced_chat_features` đã áp dụng thành công lên Neon development đang cấu hình; Prisma generate, type-check, ESLint, 28 file test với 94 tests và production build đều thành công.
 
 ---
 

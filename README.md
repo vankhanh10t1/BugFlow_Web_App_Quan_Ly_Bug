@@ -26,7 +26,7 @@ Tài liệu công khai cho người dùng nằm tại `/docs`. Nhật ký triể
 - Kiểm tra quyền và membership phía server để chống IDOR.
 - Rate limiting bền vững bằng PostgreSQL và Same-Origin/CSRF guard cho API mutation.
 - AI Chatbot MVP hỗ trợ hướng dẫn sử dụng, cải thiện báo cáo lỗi và gợi ý priority/severity; không lưu transcript và không tự thay đổi dữ liệu.
-- Chat dự án, direct chat giữa user có dự án chung và kênh hỗ trợ Admin; lưu PostgreSQL, unread/read receipt và polling 4–5 giây.
+- Chat dự án, direct chat giữa user có dự án chung và kênh hỗ trợ Admin; có delivery/read receipt, media/file, nhắc hẹn, thao tác tin nhắn, thiết lập riêng tư và polling 4–5 giây.
 
 ### Công nghệ
 
@@ -255,7 +255,7 @@ npm run type-check
 npm run build
 ```
 
-Trạng thái xác minh gần nhất: 28 test files, 93 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
+Trạng thái xác minh gần nhất: 28 test files, 94 tests đạt; Prisma validate/generate, lint, TypeScript và production build đều thành công.
 
 ### Deploy lên Vercel
 
@@ -272,8 +272,9 @@ Trạng thái xác minh gần nhất: 28 test files, 93 tests đạt; Prisma val
 - Nút AI nổi trong dashboard hỗ trợ `GUIDE`, `IMPROVE_BUG`, `CLASSIFY_BUG`. Nếu mở từ trang Bug, client chỉ gửi `bugId`; server tự tải context sau khi kiểm tra quyền.
 - AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider chính là GroqCloud; API key chỉ được đọc phía server.
 - `/chat` hỗ trợ Project, Direct và Support. Project `VIEWER` chỉ đọc; Direct yêu cầu hai user active có project chung; Support do user mở với Admin.
-- Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Chưa có attachment, presence hoặc typing indicator.
-- Cần chạy migration `20260720150000_ai_chat_and_realtime_chat` và cấu hình các biến AI trong `.env.example`.
+- Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Trạng thái gồm Chưa gửi/Đã gửi/Đã nhận/Đã xem; “Đã nhận” được cập nhật khi thiết bị nhận polling hội thoại và “Đã xem” khi hội thoại được mở.
+- Chat hỗ trợ emoji, sticker, ảnh/video/file Cloudinary, ảnh chụp màn hình theo quyền trình duyệt, nhắc hẹn, mức Quan trọng/Khẩn cấp, ghim/đánh dấu/chọn nhiều/thu hồi/xóa phía tôi và panel Thông tin hội thoại.
+- Thiết lập tự ẩn, ẩn trò chuyện và xóa lịch sử đều áp dụng riêng cho người dùng hiện tại; báo xấu được lưu để quản trị xử lý. Cần chạy thêm migration `20260722130000_advanced_chat_features`.
 
 #### Cấu hình GroqCloud
 
@@ -296,7 +297,8 @@ Khi deploy Vercel: vào **Project → Settings → Environment Variables**, thê
 
 - Chưa có Playwright E2E cho toàn bộ workflow.
 - Cần tiếp tục kiểm thử production thực tế cho Cloudinary, email/notification và WAF traffic baseline.
-- Chat attachment, presence, typing indicator và managed realtime hiện chưa có; đây là các hướng **đang xem xét**, không phải tính năng đã triển khai.
+- Presence, typing indicator và managed realtime hiện chưa có; chat vẫn dùng polling phù hợp Vercel serverless.
+- Nhắc hẹn hiện được lưu và hiển thị trong Thông tin hội thoại; tác vụ gửi notification đúng thời điểm chưa có scheduler riêng. Trình duyệt luôn quyết định nguồn được phép chụp màn hình, nên UI có fallback tải ảnh thủ công.
 - Streaming/cancel phản hồi AI và audit AI nâng cao chưa được triển khai.
 - Không block IP/quốc gia hoặc Challenge toàn ứng dụng nếu chưa có bằng chứng abuse.
 
@@ -328,7 +330,7 @@ Public user documentation is available at `/docs`. Detailed implementation histo
 - Server-side membership and permission checks to prevent IDOR.
 - Persistent PostgreSQL rate limiting and Same-Origin/CSRF guards for mutation APIs.
 - A GroqCloud AI Chatbot for app guidance, Bug-report improvement, and priority/severity suggestions; transcripts are not persisted and the AI cannot mutate application data.
-- Project, direct, and Admin-support chat persisted in PostgreSQL, with unread/read receipts and 4–5 second polling.
+- Project, direct, and Admin-support chat persisted in PostgreSQL, with delivery/read receipts, media/files, reminders, message actions, privacy settings, and 4–5 second polling.
 
 ### Technology
 
@@ -557,7 +559,7 @@ npm run type-check
 npm run build
 ```
 
-Latest verified state: 28 test files and 93 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
+Latest verified state: 28 test files and 94 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
 
 ### Deploying to Vercel
 
@@ -573,8 +575,9 @@ Latest verified state: 28 test files and 93 passing tests; Prisma validation/gen
 
 - The dashboard AI launcher supports `GUIDE`, `IMPROVE_BUG`, and `CLASSIFY_BUG`. For Bug context, the client sends only `bugId`; the server loads permitted data after authorization.
 - The AI does not persist transcripts, expose secrets/email/attachment URLs, or mutate application data. GroqCloud is the current provider.
-- `/chat` supports project conversations, direct conversations between active users sharing a project, and Admin support conversations. Messages, unread state, and read receipts are stored in PostgreSQL; updates use 4–5 second polling.
-- Project `VIEWER` members are read-only. Chat attachments, presence, and typing indicators are not implemented.
+- `/chat` supports project conversations, direct conversations between active users sharing a project, and Admin support conversations. PostgreSQL stores messages, unread/read/delivery receipts, reminders, message actions, and per-user conversation settings; updates use 4–5 second polling.
+- Project `VIEWER` members are read-only. Chat supports emoji, stickers, Cloudinary images/video/files, browser-authorized screenshots, important/urgent messages, pin/mark/multi-select/recall/delete-for-me actions, and a conversation-information panel.
+- Apply migration `20260722130000_advanced_chat_features` after the base AI/chat migration. Presence, typing indicators, and managed realtime are not implemented.
 
 #### GroqCloud configuration
 
@@ -594,6 +597,6 @@ Restart the local server or redeploy Vercel after changing these variables. Neve
 
 - Full workflow Playwright E2E coverage has not been added yet.
 - Live production testing is still needed for Cloudinary, email/notifications, and WAF traffic baselines.
-- Chat attachments, presence, typing indicators, and managed realtime are under consideration and are not implemented.
+- Presence, typing indicators, and managed realtime are not implemented. Reminders are persisted but do not yet have a dedicated scheduled-notification worker; screen capture depends on the browser's source picker and permission.
 - AI response streaming/cancellation and advanced AI auditing are not implemented.
 - Do not block countries/IPs or challenge the entire application without evidence of abuse.

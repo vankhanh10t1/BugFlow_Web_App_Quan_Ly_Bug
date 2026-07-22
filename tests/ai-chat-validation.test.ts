@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aiChatSchema } from "@/lib/validators/ai";
-import { chatMessageSchema, createConversationSchema } from "@/lib/validators/chat";
+import { chatBulkActionSchema, chatMessageActionSchema, chatMessageSchema, chatReportSchema, chatSettingsSchema, createConversationSchema } from "@/lib/validators/chat";
 import { selectChatbotModel } from "@/features/ai/model-selector";
 import { cleanInlineMarkdown, parseAiAnswer } from "@/features/ai/answer-format";
 import { normalizeAiAnswer } from "@/features/ai/response-normalizer";
@@ -68,5 +68,15 @@ describe("chat validation", () => {
   it("limits message content and validates idempotency key", () => {
     expect(chatMessageSchema.safeParse({ content: "Xin chào", clientId: "c2df8548-8c33-4fc6-befa-47136691b841" }).success).toBe(true);
     expect(chatMessageSchema.safeParse({ content: "x".repeat(2_001) }).success).toBe(false);
+  });
+  it("validates advanced messages, actions, and per-user settings", () => {
+    expect(chatMessageSchema.safeParse({ type: "STICKER", sticker: "👍", content: "", priority: "IMPORTANT" }).success).toBe(true);
+    expect(chatMessageSchema.safeParse({ type: "REMINDER", content: "Họp dự án", reminderAt: "2026-07-23T02:00:00.000Z" }).success).toBe(true);
+    expect(chatMessageSchema.safeParse({ type: "REMINDER", content: "Họp dự án" }).success).toBe(false);
+    expect(chatMessageActionSchema.safeParse({ action: "RECALL" }).success).toBe(true);
+    expect(chatBulkActionSchema.safeParse({ action: "DELETE_FOR_ME", messageIds: ["cm12345678901234567890123"] }).success).toBe(true);
+    expect(chatSettingsSchema.safeParse({ autoDeleteSeconds: 3_600, hidden: true }).success).toBe(true);
+    expect(chatSettingsSchema.safeParse({ autoDeleteSeconds: 30 }).success).toBe(false);
+    expect(chatReportSchema.safeParse({ reason: "Nội dung có dấu hiệu quấy rối" }).success).toBe(true);
   });
 });

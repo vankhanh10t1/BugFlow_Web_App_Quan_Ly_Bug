@@ -29,6 +29,6 @@ export async function POST(request: Request, { params }: Context) {
     const input = chatMessageSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", input.error.issues[0]?.message ?? "Tin nhắn không hợp lệ", 400);
     await enforceUserMutationLimit("chat:message:send", actor.id, 30);
-    return apiSuccess(await sendMessage((await params).conversationId, actor, input.data.content, input.data.clientId), "Đã gửi tin nhắn", 201);
+    return apiSuccess(await sendMessage((await params).conversationId, actor, input.data), "Đã gửi tin nhắn", 201);
   } catch (error) { return chatApiError(error, { actor, step: "send-message" }); }
 }
