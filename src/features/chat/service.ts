@@ -138,7 +138,7 @@ export async function getConversation(conversationId: string, actor: ChatActor) 
 function messageSelect(actorId: string) {
   return {
     id: true, conversationId: true, senderId: true, clientId: true, content: true,
-    type: true, priority: true, sticker: true, attachmentUrl: true, attachmentName: true,
+    type: true, priority: true, sticker: true, gifUrl: true, gifPreviewUrl: true, gifWidth: true, gifHeight: true, gifProvider: true, attachmentUrl: true, attachmentName: true,
     attachmentMime: true, attachmentSize: true, attachmentType: true, reminderAt: true,
     pinnedAt: true, recalledAt: true, createdAt: true, editedAt: true,
     sender: { select: userSelect }, marks: { where: { userId: actorId }, select: { id: true } },
@@ -158,6 +158,7 @@ function deliveryStatus(message: { senderId: string; createdAt: Date }, actor: C
 type MessageRow = {
   id: string; conversationId: string; senderId: string; clientId: string | null; content: string;
   type: ChatMessageType; priority: ChatMessagePriority; sticker: string | null;
+  gifUrl: string | null; gifPreviewUrl: string | null; gifWidth: number | null; gifHeight: number | null; gifProvider: string | null;
   attachmentUrl: string | null; attachmentName: string | null; attachmentMime: string | null;
   attachmentSize: number | null; attachmentType: AttachmentType | null; reminderAt: Date | null;
   pinnedAt: Date | null; recalledAt: Date | null; createdAt: Date; editedAt: Date | null;
@@ -170,6 +171,11 @@ function visibleMessage(message: MessageRow) {
     ...message,
     content: message.recalledAt ? "Tin nhắn đã được thu hồi" : message.content,
     sticker: message.recalledAt ? null : message.sticker,
+    gifUrl: message.recalledAt ? null : message.gifUrl,
+    gifPreviewUrl: message.recalledAt ? null : message.gifPreviewUrl,
+    gifWidth: message.recalledAt ? null : message.gifWidth,
+    gifHeight: message.recalledAt ? null : message.gifHeight,
+    gifProvider: message.recalledAt ? null : message.gifProvider,
     attachmentUrl: message.recalledAt ? null : message.attachmentUrl,
     attachmentName: message.recalledAt ? null : message.attachmentName,
     attachmentMime: message.recalledAt ? null : message.attachmentMime,
@@ -204,7 +210,7 @@ export async function listMessages(conversationId: string, actor: ChatActor, opt
   return { items, nextCursor: hasMore ? rows[limit - 1]?.id ?? null : null };
 }
 
-export type SendChatMessageInput = { content: string; clientId?: string; type: "TEXT" | "EMOJI" | "STICKER" | "REMINDER"; priority: ChatMessagePriority; sticker?: string; reminderAt?: Date };
+export type SendChatMessageInput = { content: string; clientId?: string; type: "TEXT" | "EMOJI" | "STICKER" | "GIF" | "REMINDER"; priority: ChatMessagePriority; sticker?: string; gifUrl?: string; gifPreviewUrl?: string; gifWidth?: number; gifHeight?: number; gifProvider?: "GIPHY"; reminderAt?: Date };
 export async function sendMessage(conversationId: string, actor: ChatActor, input: SendChatMessageInput) {
   const { conversation } = await context(conversationId, actor, true);
   return prisma.$transaction(async (tx) => {
@@ -212,13 +218,13 @@ export async function sendMessage(conversationId: string, actor: ChatActor, inpu
       const existing = await tx.chatMessage.findUnique({ where: { conversationId_clientId: { conversationId, clientId: input.clientId } }, select: messageSelect(actor.id) });
       if (existing) return { ...visibleMessage(existing), deliveryStatus: "SENT" as const };
     }
-    const message = await tx.chatMessage.create({ data: { conversationId, senderId: actor.id, content: input.content, clientId: input.clientId, type: input.type, priority: input.priority, sticker: input.sticker, reminderAt: input.reminderAt }, select: messageSelect(actor.id) });
+    const message = await tx.chatMessage.create({ data: { conversationId, senderId: actor.id, content: input.content, clientId: input.clientId, type: input.type, priority: input.priority, sticker: input.sticker, gifUrl: input.gifUrl, gifPreviewUrl: input.gifPreviewUrl, gifWidth: input.gifWidth, gifHeight: input.gifHeight, gifProvider: input.gifProvider, reminderAt: input.reminderAt }, select: messageSelect(actor.id) });
     await tx.chatConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
     await tx.chatParticipant.upsert({ where: { conversationId_userId: { conversationId, userId: actor.id } }, create: { conversationId, userId: actor.id, lastReadAt: message.createdAt, lastDeliveredAt: message.createdAt }, update: { lastReadAt: message.createdAt, lastDeliveredAt: message.createdAt, leftAt: null } });
     const recipientIds = conversation.type === "PROJECT" && conversation.projectId
       ? (await tx.projectMember.findMany({ where: { projectId: conversation.projectId, userId: { not: actor.id }, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId)
       : (await tx.chatParticipant.findMany({ where: { conversationId, userId: { not: actor.id }, leftAt: null, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId);
-    const preview = input.type === "STICKER" ? "Đã gửi một sticker" : input.type === "REMINDER" ? `Nhắc hẹn: ${input.content}` : input.content;
+    const preview = input.type === "STICKER" ? "Đã gửi một sticker" : input.type === "GIF" ? "Đã gửi một GIF" : input.type === "REMINDER" ? `Nhắc hẹn: ${input.content}` : input.content;
     if (recipientIds.length) await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, conversationId, chatMessageId: message.id, type: "CHAT_MESSAGE" as const, title: input.priority === "URGENT" ? "Tin nhắn khẩn cấp" : "Tin nhắn mới", message: preview.slice(0, 120) })) });
     return { ...visibleMessage(message), deliveryStatus: "SENT" as const };
   });

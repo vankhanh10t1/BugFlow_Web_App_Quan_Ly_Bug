@@ -1796,6 +1796,8 @@
 - Bổ sung emoji, sticker, ảnh/video/file Cloudinary, chụp màn hình theo quyền trình duyệt, nhắc hẹn và nhãn Quan trọng/Khẩn cấp.
 - Bổ sung copy, ghim, đánh dấu, chọn nhiều, thu hồi, xóa phía tôi và panel Thông tin hội thoại gồm media/file/link/nhắc hẹn/thiết lập riêng tư/báo xấu.
 - Thêm schema, migration, API có auth/ACL/same-origin/rate limit và validator cho các tính năng Chat nâng cao.
+- Thay emoji picker thủ công bằng Emoji Mart, lazy-load khi mở và tự đóng sau khi chọn/click ra ngoài.
+- Thêm GIPHY React Components với tìm kiếm/trending GIF, type `GIF`, metadata URL/preview/kích thước/provider và trạng thái thiếu cấu hình an toàn.
 
 ### Bug gặp phải
 
@@ -1809,6 +1811,8 @@
 - Khi vào `/chat`, workspace nhận object từ cache rồi gọi `.find()`/`.map()`, gây client render exception cho mọi role. Retry giữ nguyên cache sai shape nên lỗi lặp lại.
 - Kiểu trạng thái UI ban đầu chỉ nhận trạng thái server nên TypeScript từ chối hai trạng thái lạc quan `UNSENT` và `FAILED`.
 - React lint không cho callback render gián tiếp đọc `fileInput.current` trong thao tác gửi lại attachment.
+- Lần cài package đầu tiên bị npm chặn do `@emoji-mart/react` chưa khai báo peer React 19; production build đầu tiên tiếp tục báo thiếu peer `emoji-mart` và `styled-components`.
+- `npm audit --omit=dev` báo 8 cảnh báo runtime (5 high, 3 moderate), trong đó chuỗi `react-use → js-cookie` và `@giphy/js-util → uuid` đến từ GIPHY; đề xuất tự động hiện tại là downgrade major không phù hợp.
 
 ### Cách xử lý
 
@@ -1828,6 +1832,9 @@
 - Mở rộng kiểu delivery ở UI, tách retry attachment thành hướng dẫn chọn lại tệp và giữ truy cập ref trực tiếp trong event handler.
 - Tái sử dụng validator/upload Cloudinary hiện có; cleanup asset nếu transaction ghi Chat thất bại và tạo notification cho người nhận sau khi lưu thành công.
 - Dùng soft-state theo từng participant/message cho tự ẩn, ẩn trò chuyện, xóa lịch sử và xóa phía tôi; thu hồi vẫn hiển thị trạng thái cho mọi participant.
+- Cài picker bằng legacy peer resolution, bổ sung hai peer dependency bắt buộc rồi xác minh trực tiếp bằng Turbopack production build.
+- Lazy-load hai picker trong Client Component; server chỉ chấp nhận GIF HTTPS từ `giphy.com`/subdomain, provider `GIPHY` và kích thước hữu hạn.
+- Không chạy `npm audit fix --force` vì phương án đề xuất có thể hạ phiên bản Next/GIPHY và phá API hiện tại; giữ validation server, không dùng cookie API của GIPHY picker và ghi nhận để theo dõi bản vá upstream.
 
 ### File/khu vực liên quan
 
@@ -1856,6 +1863,9 @@
 - `src/app/api/conversations/[conversationId]/attachments`, `info`, `messages/[messageId]`, `messages/bulk`, `settings`, `report`
 - `src/features/chat/service.ts`, `src/components/chat/chat-workspace.tsx`
 - `tests/ai-chat-validation.test.ts`, `README.md`
+- `src/components/chat/emoji-mart-picker.tsx`, `src/components/chat/giphy-picker.tsx`
+- `prisma/migrations/20260722143000_chat_giphy_messages/migration.sql`
+- `.env.example`, `package.json`, `package-lock.json`
 
 ### Ghi chú
 
@@ -1870,6 +1880,8 @@
 - Chat nâng cao vẫn dùng polling 4–5 giây để phù hợp Vercel serverless. Presence và typing indicator chưa triển khai.
 - Nhắc hẹn đã được lưu/xem nhưng scheduler gửi notification đúng giờ là TODO; chụp màn hình phụ thuộc bộ chọn nguồn và quyền của trình duyệt, có fallback upload ảnh.
 - Migration `20260722130000_advanced_chat_features` đã áp dụng thành công lên Neon development đang cấu hình; Prisma generate, type-check, ESLint, 28 file test với 94 tests và production build đều thành công.
+- GIPHY Web SDK key là biến public được đóng vào client bundle lúc build; thiếu `NEXT_PUBLIC_GIPHY_API_KEY` chỉ vô hiệu hóa nút GIF, không làm crash Chat.
+- Migration `20260722143000_chat_giphy_messages` đã áp dụng thành công lên Neon development đang cấu hình; production build, type-check, ESLint và 28 file test/94 tests đều đạt.
 
 ---
 

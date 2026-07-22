@@ -1,16 +1,18 @@
 "use client";
 
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Camera, CheckCheck, CircleEllipsis, Copy, FileUp, Info, Laugh, MessageCirclePlus, MessagesSquare, Pin, Send, ShieldAlert, Star, Trash2, Undo2, X } from "lucide-react";
+import type { SelectedGif } from "@/components/chat/giphy-picker";
 
 type User = { id: string; fullName: string; username: string; systemRole: string };
 type Priority = "NORMAL" | "IMPORTANT" | "URGENT";
 type Delivery = "UNSENT" | "SENT" | "DELIVERED" | "READ" | "FAILED";
-type MessageType = "TEXT" | "EMOJI" | "STICKER" | "IMAGE" | "FILE" | "REMINDER";
+type MessageType = "TEXT" | "EMOJI" | "STICKER" | "GIF" | "IMAGE" | "FILE" | "REMINDER";
 type Conversation = { id: string; type: "PROJECT" | "DIRECT" | "SUPPORT"; displayName: string; unreadCount: number; canSend: boolean; updatedAt: string; messages: { content: string; createdAt: string }[] };
-type Message = { id: string; clientId?: string | null; content: string; type: MessageType; priority: Priority; sticker?: string | null; attachmentUrl?: string | null; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; reminderAt?: string | null; pinnedAt?: string | null; recalledAt?: string | null; marked?: boolean; deliveryStatus?: Delivery | null; createdAt: string; sender: User; pending?: boolean; failed?: boolean };
+type Message = { id: string; clientId?: string | null; content: string; type: MessageType; priority: Priority; sticker?: string | null; gifUrl?: string | null; gifPreviewUrl?: string | null; gifWidth?: number | null; gifHeight?: number | null; gifProvider?: string | null; attachmentUrl?: string | null; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; reminderAt?: string | null; pinnedAt?: string | null; recalledAt?: string | null; marked?: boolean; deliveryStatus?: Delivery | null; createdAt: string; sender: User; pending?: boolean; failed?: boolean };
 type Envelope<T> = { success: boolean; message: string; data: T };
 type Candidates = { projects: { id: string; code: string; name: string }[]; directUsers: User[]; admins: User[] };
 type ChatInit = { currentUser: { id: string; systemRole: string }; conversations: Conversation[]; candidates: Candidates };
@@ -42,9 +44,11 @@ function loadError(error: unknown, resource: string) {
   return `Không thể tải ${resource}. Vui lòng thử lại.`;
 }
 
-const emojis = ["😀", "😂", "😍", "👍", "👏", "🎉", "❤️", "🙏", "🔥", "✅"];
 const stickers = ["🎉", "👍", "❤️", "😂", "🥳", "💪", "🚀", "🌟"];
 const statusText: Record<Delivery, string> = { UNSENT: "Chưa gửi", SENT: "Đã gửi", DELIVERED: "Đã nhận", READ: "Đã xem", FAILED: "Gửi lỗi" };
+const giphyApiKey = process.env.NEXT_PUBLIC_GIPHY_API_KEY ?? "";
+const EmojiMartPicker = dynamic(() => import("@/components/chat/emoji-mart-picker"), { ssr: false, loading: () => <p className="rounded-xl border bg-white p-4 text-sm text-slate-500">Đang tải emoji…</p> });
+const GiphyPicker = dynamic(() => import("@/components/chat/giphy-picker"), { ssr: false, loading: () => <p className="rounded-xl border bg-white p-4 text-sm text-slate-500">Đang tải GIF…</p> });
 
 export function ChatWorkspace({ initialConversationId }: { initialConversationId?: string }) {
   const init = useQuery({ queryKey: ["chat", "init"], queryFn: () => json<ChatInit>("/api/chat/init"), retry: false });
@@ -56,6 +60,7 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
 function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversationId, initialConversations, initialCandidates }: { currentUserId: string; currentUserRole: string; initialConversationId?: string; initialConversations: Conversation[]; initialCandidates: Candidates }) {
   const client = useQueryClient();
   const fileInput = useRef<HTMLInputElement>(null);
+  const pickerArea = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState(initialConversationId ?? "");
   const [showCreate, setShowCreate] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -64,6 +69,7 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
   const [content, setContent] = useState("");
   const [priority, setPriority] = useState<Priority>("NORMAL");
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showGif, setShowGif] = useState(false);
   const [showSticker, setShowSticker] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [reminderAt, setReminderAt] = useState("");
@@ -72,6 +78,17 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [reportReason, setReportReason] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+
+  useEffect(() => {
+    const closePickers = (event: PointerEvent) => {
+      if (pickerArea.current && event.target instanceof Node && !pickerArea.current.contains(event.target)) {
+        setShowEmoji(false);
+        setShowGif(false);
+      }
+    };
+    document.addEventListener("pointerdown", closePickers);
+    return () => document.removeEventListener("pointerdown", closePickers);
+  }, []);
 
   const conversations = useQuery({ queryKey: ["chat", "conversations"], queryFn: () => json<Conversation[]>("/api/conversations"), initialData: initialConversations, refetchInterval: 5_000 });
   const candidates = useQuery({ queryKey: ["chat", "candidates"], queryFn: () => json<Candidates>("/api/chat/candidates"), initialData: initialCandidates });
@@ -98,11 +115,11 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
     onError: (error) => setNotice(error.message),
   });
 
-  type SendInput = { clientId: string; content: string; type: "TEXT" | "EMOJI" | "STICKER" | "REMINDER"; priority: Priority; sticker?: string; reminderAt?: string };
+  type SendInput = { clientId: string; content: string; type: "TEXT" | "EMOJI" | "STICKER" | "GIF" | "REMINDER"; priority: Priority; sticker?: string; gifUrl?: string; gifPreviewUrl?: string; gifWidth?: number; gifHeight?: number; gifProvider?: "GIPHY"; reminderAt?: string };
   const send = useMutation({
     mutationFn: (input: SendInput) => json<Message>(`/api/conversations/${activeId}/messages`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input) }),
     onMutate: (input) => {
-      const optimistic: Message = { id: input.clientId, clientId: input.clientId, content: input.content, type: input.type, priority: input.priority, sticker: input.sticker, reminderAt: input.reminderAt, createdAt: new Date().toISOString(), sender: { id: currentUserId, fullName: "Bạn", username: "", systemRole: currentUserRole }, deliveryStatus: "UNSENT", pending: true };
+      const optimistic: Message = { id: input.clientId, clientId: input.clientId, content: input.content, type: input.type, priority: input.priority, sticker: input.sticker, gifUrl: input.gifUrl, gifPreviewUrl: input.gifPreviewUrl, gifWidth: input.gifWidth, gifHeight: input.gifHeight, gifProvider: input.gifProvider, reminderAt: input.reminderAt, createdAt: new Date().toISOString(), sender: { id: currentUserId, fullName: "Bạn", username: "", systemRole: currentUserRole }, deliveryStatus: "UNSENT", pending: true };
       setPendingMessages((items) => [...items.filter((item) => item.clientId !== input.clientId), optimistic]);
       setNotice("");
     },
@@ -140,8 +157,13 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
   const sendText = (override?: Partial<SendInput>) => {
     const type = override?.type ?? (showReminder ? "REMINDER" : "TEXT");
     const text = override?.content ?? content.trim();
-    if (type !== "STICKER" && !text) return;
+    if (type !== "STICKER" && type !== "GIF" && !text) return;
     send.mutate({ clientId: crypto.randomUUID(), content: text, type, priority, ...(type === "REMINDER" ? { reminderAt: new Date(reminderAt).toISOString() } : {}), ...override });
+  };
+
+  const sendGif = (gif: SelectedGif) => {
+    sendText({ type: "GIF", content: "", gifUrl: gif.url, gifPreviewUrl: gif.previewUrl, gifWidth: gif.width, gifHeight: gif.height, gifProvider: gif.provider });
+    setShowGif(false);
   };
 
   const captureScreen = async () => {
@@ -179,10 +201,14 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">{messages.isLoading ? <p className="text-sm text-slate-500">Đang tải tin nhắn…</p> : messages.isError ? <ErrorRetry message={loadError(messages.error, "tin nhắn")} retry={() => void messages.refetch()} /> : allMessages.length ? allMessages.map((message) => <MessageBubble key={message.id} message={message} mine={message.sender.id === currentUserId} selected={selectedMessages.has(message.id)} toggleSelected={() => setSelectedMessages((current) => { const next = new Set(current); if (next.has(message.id)) next.delete(message.id); else next.add(message.id); return next; })} copy={() => { void navigator.clipboard.writeText(message.content); setNotice("Đã sao chép tin nhắn."); }} act={(actionName) => action.mutate({ messageId: message.id, actionName })} retry={() => retryPending(message)} />) : <p className="pt-20 text-center text-sm text-slate-500">Chưa có tin nhắn trong hội thoại này.</p>}</div>
         {notice ? <p role="status" className="border-t bg-amber-50 px-4 py-2 text-sm text-amber-800">{notice}</p> : null}
         {selected.canSend ? <div className="border-t p-3">
-          {showEmoji ? <Picker items={emojis} choose={(item) => { setContent((value) => value + item); setShowEmoji(false); }} /> : null}
+          <div ref={pickerArea} className="relative">
+            {showEmoji ? <div className="absolute bottom-2 left-0 z-30"><EmojiMartPicker onSelect={(emoji) => { setContent((value) => value + emoji); setShowEmoji(false); }} /></div> : null}
+            {showGif ? <div className="absolute bottom-2 left-0 z-30"><GiphyPicker apiKey={giphyApiKey} onSelect={sendGif} /></div> : null}
+          </div>
           {showSticker ? <Picker items={stickers} large choose={(item) => { sendText({ type: "STICKER", content: "", sticker: item }); setShowSticker(false); }} /> : null}
           {showReminder ? <div className="mb-2 grid gap-2 rounded-xl bg-blue-50 p-3 sm:grid-cols-2"><input type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm" /><p className="text-xs text-blue-700">Nhắc hẹn được lưu trong hội thoại. Tác vụ gửi thông báo đúng giờ là bước phát triển tiếp theo.</p></div> : null}
-          <div className="mb-2 flex flex-wrap items-center gap-1"><ToolButton label="Emoji" onClick={() => setShowEmoji((value) => !value)}><Laugh /></ToolButton><ToolButton label="Sticker" onClick={() => setShowSticker((value) => !value)}><CircleEllipsis /></ToolButton><ToolButton label="Ảnh hoặc file" onClick={() => fileInput.current?.click()}><FileUp /></ToolButton><ToolButton label="Chụp màn hình" onClick={() => void captureScreen()}><Camera /></ToolButton><ToolButton label="Nhắc hẹn" onClick={() => setShowReminder((value) => !value)}><BellRing /></ToolButton><select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="ml-auto h-9 rounded-lg border bg-white px-2 text-xs"><option value="NORMAL">Tin thường</option><option value="IMPORTANT">Quan trọng</option><option value="URGENT">Khẩn cấp</option></select><input ref={fileInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,text/plain,.log,.ndjson,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate({ file, clientId: crypto.randomUUID() }); event.currentTarget.value = ""; }} /></div>
+          <div className="mb-2 flex flex-wrap items-center gap-1"><ToolButton label="Emoji" onClick={() => { setShowEmoji((value) => !value); setShowGif(false); }}><Laugh /></ToolButton><button type="button" title={giphyApiKey ? "GIF" : "Chưa cấu hình GIPHY"} disabled={!giphyApiKey} onClick={() => { setShowGif((value) => !value); setShowEmoji(false); }} className="h-9 rounded-lg border px-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">GIF</button><ToolButton label="Sticker" onClick={() => setShowSticker((value) => !value)}><CircleEllipsis /></ToolButton><ToolButton label="Ảnh hoặc file" onClick={() => fileInput.current?.click()}><FileUp /></ToolButton><ToolButton label="Chụp màn hình" onClick={() => void captureScreen()}><Camera /></ToolButton><ToolButton label="Nhắc hẹn" onClick={() => setShowReminder((value) => !value)}><BellRing /></ToolButton><select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="ml-auto h-9 rounded-lg border bg-white px-2 text-xs"><option value="NORMAL">Tin thường</option><option value="IMPORTANT">Quan trọng</option><option value="URGENT">Khẩn cấp</option></select><input ref={fileInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,text/plain,.log,.ndjson,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate({ file, clientId: crypto.randomUUID() }); event.currentTarget.value = ""; }} /></div>
+          {!giphyApiKey ? <p className="mb-2 text-xs text-amber-700">GIF đang tắt vì chưa cấu hình `NEXT_PUBLIC_GIPHY_API_KEY`.</p> : null}
           <form onSubmit={(event) => { event.preventDefault(); sendText(); }} className="flex gap-2"><textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} placeholder={showReminder ? "Nội dung nhắc hẹn…" : "Nhập tin nhắn…"} className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm" /><button disabled={send.isPending || !content.trim() || (showReminder && !reminderAt)} aria-label="Gửi tin nhắn" className="grid w-12 place-items-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="size-4" /></button></form>
           <p className="mt-2 text-[11px] text-slate-400">Chụp màn hình phụ thuộc quyền và bộ chọn nguồn của trình duyệt. Nếu không hỗ trợ, hãy tải ảnh lên thủ công.</p>
         </div> : <p className="border-t bg-amber-50 p-4 text-center text-sm text-amber-800">Bạn có quyền xem nhưng không thể gửi tin nhắn trong dự án này.</p>}
@@ -200,7 +226,7 @@ function MessageBubble({ message, mine, selected, toggleSelected, copy, act, ret
     <input type="checkbox" checked={selected} onChange={toggleSelected} aria-label="Chọn tin nhắn" className="mt-4 size-4" />
     <article className={`relative max-w-[85%] rounded-2xl px-4 py-3 text-sm shadow-sm ${mine ? "bg-blue-600 text-white" : "border bg-white text-slate-800"} ${message.priority === "URGENT" ? "ring-2 ring-red-400" : message.priority === "IMPORTANT" ? "ring-2 ring-amber-300" : ""}`}>
       <div className="mb-1 flex items-center gap-2"><span className={`text-[11px] ${mine ? "text-blue-100" : "text-slate-500"}`}>{message.sender.fullName}</span>{message.priority === "IMPORTANT" ? <span className="rounded bg-amber-100 px-1.5 text-[10px] font-medium text-amber-800">Quan trọng</span> : null}{message.priority === "URGENT" ? <span className="rounded bg-red-100 px-1.5 text-[10px] font-medium text-red-700">Khẩn cấp</span> : null}{message.pinnedAt ? <Pin className="size-3" /> : null}{message.marked ? <Star className="size-3 fill-current" /> : null}</div>
-      {recalled ? <p className="italic opacity-80">Tin nhắn đã được thu hồi</p> : message.type === "STICKER" ? <p className="text-5xl leading-none">{message.sticker}</p> : <><p className="whitespace-pre-wrap break-words">{message.content}</p>{message.type === "REMINDER" && message.reminderAt ? <p className={`mt-2 rounded-lg px-2 py-1 text-xs ${mine ? "bg-blue-500" : "bg-blue-50 text-blue-700"}`}><BellRing className="mr-1 inline size-3" />{new Date(message.reminderAt).toLocaleString("vi-VN")}</p> : null}{message.attachmentUrl && message.type === "IMAGE" && message.attachmentMime?.startsWith("video/") ? <video src={message.attachmentUrl} controls className="mt-2 max-h-64 max-w-full rounded-lg" /> : null}{message.attachmentUrl && message.type === "IMAGE" && !message.attachmentMime?.startsWith("video/") ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer"><Image src={message.attachmentUrl} alt={message.attachmentName ?? "Ảnh trong chat"} width={420} height={280} unoptimized className="mt-2 max-h-64 w-auto rounded-lg object-contain" /></a> : null}{message.attachmentUrl && message.type === "FILE" ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className={`mt-2 flex items-center gap-2 rounded-lg border p-2 text-xs ${mine ? "border-blue-400" : "bg-slate-50"}`}><FileUp className="size-4" /><span className="break-all">{message.attachmentName}</span></a> : null}</>}
+      {recalled ? <p className="italic opacity-80">Tin nhắn đã được thu hồi</p> : message.type === "STICKER" ? <p className="text-5xl leading-none">{message.sticker}</p> : <><p className="whitespace-pre-wrap break-words">{message.content}</p>{message.type === "GIF" && message.gifUrl ? <a href={message.gifUrl} target="_blank" rel="noreferrer" className="block"><Image src={message.gifUrl} alt="GIF từ GIPHY" width={message.gifWidth ?? 320} height={message.gifHeight ?? 240} unoptimized className="mt-2 max-h-72 max-w-full rounded-lg object-contain" /><span className={`mt-1 block text-[10px] ${mine ? "text-blue-100" : "text-slate-400"}`}>GIPHY</span></a> : null}{message.type === "REMINDER" && message.reminderAt ? <p className={`mt-2 rounded-lg px-2 py-1 text-xs ${mine ? "bg-blue-500" : "bg-blue-50 text-blue-700"}`}><BellRing className="mr-1 inline size-3" />{new Date(message.reminderAt).toLocaleString("vi-VN")}</p> : null}{message.attachmentUrl && message.type === "IMAGE" && message.attachmentMime?.startsWith("video/") ? <video src={message.attachmentUrl} controls className="mt-2 max-h-64 max-w-full rounded-lg" /> : null}{message.attachmentUrl && message.type === "IMAGE" && !message.attachmentMime?.startsWith("video/") ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer"><Image src={message.attachmentUrl} alt={message.attachmentName ?? "Ảnh trong chat"} width={420} height={280} unoptimized className="mt-2 max-h-64 w-auto rounded-lg object-contain" /></a> : null}{message.attachmentUrl && message.type === "FILE" ? <a href={message.attachmentUrl} target="_blank" rel="noreferrer" className={`mt-2 flex items-center gap-2 rounded-lg border p-2 text-xs ${mine ? "border-blue-400" : "bg-slate-50"}`}><FileUp className="size-4" /><span className="break-all">{message.attachmentName}</span></a> : null}</>}
       <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${mine ? "text-blue-100" : "text-slate-400"}`}><time>{new Date(message.createdAt).toLocaleString("vi-VN")}</time>{mine ? <span className="flex items-center gap-1"><CheckCheck className="size-3" />{statusText[delivery]}</span> : null}</div>
       {message.failed ? <button type="button" onClick={retry} className="mt-2 flex items-center gap-1 rounded bg-white/90 px-2 py-1 text-xs text-red-600"><Undo2 className="size-3" />Gửi lại</button> : null}
     </article>

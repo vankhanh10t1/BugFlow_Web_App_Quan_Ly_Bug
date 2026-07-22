@@ -8,13 +8,26 @@ export const createConversationSchema = z.discriminatedUnion("type", [
 export const chatMessageSchema = z.object({
   content: z.string().trim().max(2_000, "Tin nhắn tối đa 2.000 ký tự").default(""),
   clientId: z.string().uuid().optional(),
-  type: z.enum(["TEXT", "EMOJI", "STICKER", "REMINDER"]).default("TEXT"),
+  type: z.enum(["TEXT", "EMOJI", "STICKER", "GIF", "REMINDER"]).default("TEXT"),
   priority: z.enum(["NORMAL", "IMPORTANT", "URGENT"]).default("NORMAL"),
   sticker: z.string().trim().max(32).optional(),
+  gifUrl: z.string().url().max(2_000).optional(),
+  gifPreviewUrl: z.string().url().max(2_000).optional(),
+  gifWidth: z.number().int().min(1).max(4_096).optional(),
+  gifHeight: z.number().int().min(1).max(4_096).optional(),
+  gifProvider: z.literal("GIPHY").optional(),
   reminderAt: z.coerce.date().optional(),
 }).superRefine((value, context) => {
   if (value.type === "STICKER" && !value.sticker) context.addIssue({ code: "custom", path: ["sticker"], message: "Hãy chọn sticker" });
-  if (value.type !== "STICKER" && !value.content) context.addIssue({ code: "custom", path: ["content"], message: "Tin nhắn không được để trống" });
+  if (value.type === "GIF") {
+    if (!value.gifUrl || !value.gifWidth || !value.gifHeight || value.gifProvider !== "GIPHY") context.addIssue({ code: "custom", path: ["gifUrl"], message: "Dữ liệu GIF không hợp lệ" });
+    for (const [field, raw] of [["gifUrl", value.gifUrl], ["gifPreviewUrl", value.gifPreviewUrl]] as const) {
+      if (!raw) continue;
+      const hostname = new URL(raw).hostname.toLowerCase();
+      if (new URL(raw).protocol !== "https:" || (hostname !== "giphy.com" && !hostname.endsWith(".giphy.com"))) context.addIssue({ code: "custom", path: [field], message: "GIF phải đến từ GIPHY qua HTTPS" });
+    }
+  }
+  if (value.type !== "STICKER" && value.type !== "GIF" && !value.content) context.addIssue({ code: "custom", path: ["content"], message: "Tin nhắn không được để trống" });
   if (value.type === "REMINDER" && (!value.reminderAt || value.reminderAt <= new Date())) context.addIssue({ code: "custom", path: ["reminderAt"], message: "Thời gian nhắc phải ở tương lai" });
 });
 

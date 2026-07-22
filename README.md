@@ -116,6 +116,7 @@ DIRECT_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=verify-full"
 AUTH_SECRET="a-long-random-secret"
 AUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_GIPHY_API_KEY=""
 ALLOWED_ORIGINS=""
 
 TWO_FACTOR_ENCRYPTION_KEY="base64-encoded-32-byte-key"
@@ -273,7 +274,7 @@ Trạng thái xác minh gần nhất: 28 test files, 94 tests đạt; Prisma val
 - AI không lưu transcript, không gửi secret/email/attachment URL và không có quyền mutation. Provider chính là GroqCloud; API key chỉ được đọc phía server.
 - `/chat` hỗ trợ Project, Direct và Support. Project `VIEWER` chỉ đọc; Direct yêu cầu hai user active có project chung; Support do user mở với Admin.
 - Tin nhắn được ghi PostgreSQL trước notification, có `clientId` chống gửi trùng và polling 4–5 giây. Trạng thái gồm Chưa gửi/Đã gửi/Đã nhận/Đã xem; “Đã nhận” được cập nhật khi thiết bị nhận polling hội thoại và “Đã xem” khi hội thoại được mở.
-- Chat hỗ trợ emoji, sticker, ảnh/video/file Cloudinary, ảnh chụp màn hình theo quyền trình duyệt, nhắc hẹn, mức Quan trọng/Khẩn cấp, ghim/đánh dấu/chọn nhiều/thu hồi/xóa phía tôi và panel Thông tin hội thoại.
+- Chat dùng Emoji Mart để chọn emoji và GIPHY React Components để tìm/gửi GIF; ngoài ra hỗ trợ sticker, ảnh/video/file Cloudinary, ảnh chụp màn hình theo quyền trình duyệt, nhắc hẹn, mức Quan trọng/Khẩn cấp, ghim/đánh dấu/chọn nhiều/thu hồi/xóa phía tôi và panel Thông tin hội thoại.
 - Thiết lập tự ẩn, ẩn trò chuyện và xóa lịch sử đều áp dụng riêng cho người dùng hiện tại; báo xấu được lưu để quản trị xử lý. Cần chạy thêm migration `20260722130000_advanced_chat_features`.
 
 #### Cấu hình GroqCloud
@@ -292,6 +293,13 @@ GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 `llama-3.1-8b-instant` xử lý hội thoại và tác vụ nhẹ. `openai/gpt-oss-120b` được chọn tập trung bởi `selectChatbotModel()` khi prompt dài, context lớn hoặc có yêu cầu phân tích/đánh giá/root cause/bảo mật/hướng xử lý. Khởi động lại `npm run dev` sau khi đổi env.
 
 Khi deploy Vercel: vào **Project → Settings → Environment Variables**, thêm ba biến trên cho Production/Preview cần dùng và redeploy. Không đặt `GROQ_API_KEY` dưới tên có prefix `NEXT_PUBLIC_`.
+
+#### Cấu hình GIPHY cho Chat
+
+1. Truy cập [GIPHY Developers](https://developers.giphy.com/), đăng nhập và tạo Web SDK app/API key.
+2. Thêm `NEXT_PUBLIC_GIPHY_API_KEY="your_giphy_web_sdk_key"` vào `.env.local`, sau đó khởi động lại dev server.
+3. Trên Vercel, thêm cùng biến cho Production/Preview trước khi build rồi redeploy. Đây là public Web SDK key được đưa vào client bundle; không dùng secret khác cho biến này và không commit key thật.
+4. Nếu thiếu key, Chat vẫn hoạt động bình thường nhưng nút GIF bị vô hiệu hóa và hiển thị hướng dẫn cấu hình.
 
 ### Giới hạn và bước tiếp theo
 
@@ -420,6 +428,7 @@ DIRECT_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DB?sslmode=verify-full"
 AUTH_SECRET="a-long-random-secret"
 AUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_GIPHY_API_KEY=""
 ALLOWED_ORIGINS=""
 
 TWO_FACTOR_ENCRYPTION_KEY="base64-encoded-32-byte-key"
@@ -576,7 +585,7 @@ Latest verified state: 28 test files and 94 passing tests; Prisma validation/gen
 - The dashboard AI launcher supports `GUIDE`, `IMPROVE_BUG`, and `CLASSIFY_BUG`. For Bug context, the client sends only `bugId`; the server loads permitted data after authorization.
 - The AI does not persist transcripts, expose secrets/email/attachment URLs, or mutate application data. GroqCloud is the current provider.
 - `/chat` supports project conversations, direct conversations between active users sharing a project, and Admin support conversations. PostgreSQL stores messages, unread/read/delivery receipts, reminders, message actions, and per-user conversation settings; updates use 4–5 second polling.
-- Project `VIEWER` members are read-only. Chat supports emoji, stickers, Cloudinary images/video/files, browser-authorized screenshots, important/urgent messages, pin/mark/multi-select/recall/delete-for-me actions, and a conversation-information panel.
+- Project `VIEWER` members are read-only. Chat uses Emoji Mart for emoji selection and GIPHY React Components for GIF search/sending; it also supports stickers, Cloudinary images/video/files, browser-authorized screenshots, important/urgent messages, pin/mark/multi-select/recall/delete-for-me actions, and a conversation-information panel.
 - Apply migration `20260722130000_advanced_chat_features` after the base AI/chat migration. Presence, typing indicators, and managed realtime are not implemented.
 
 #### GroqCloud configuration
@@ -592,6 +601,10 @@ GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
 Restart the local server or redeploy Vercel after changing these variables. Never commit the real key or expose it with a `NEXT_PUBLIC_` prefix.
+
+#### GIPHY configuration for Chat
+
+Create a Web SDK app/key at [GIPHY Developers](https://developers.giphy.com/), then add `NEXT_PUBLIC_GIPHY_API_KEY="your_giphy_web_sdk_key"` to `.env.local`. Add the same variable to the required Vercel Production/Preview scopes before building and redeploy. The button is safely disabled when the key is absent; never commit a real key.
 
 ### Limitations and next steps
 
