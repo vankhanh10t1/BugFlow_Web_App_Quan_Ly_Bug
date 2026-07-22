@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { aiChatSchema } from "@/lib/validators/ai";
 import { chatMessageSchema, createConversationSchema } from "@/lib/validators/chat";
 import { selectChatbotModel } from "@/features/ai/model-selector";
+import { cleanInlineMarkdown, parseAiAnswer } from "@/features/ai/answer-format";
+import { normalizeAiAnswer } from "@/features/ai/response-normalizer";
+import { renderToStaticMarkup } from "react-dom/server";
+import { AiAnswer } from "@/components/ai/ai-answer";
+import { createElement } from "react";
 
 describe("AI chat validation", () => {
   it("accepts only the three safe MVP tasks", () => {
@@ -27,6 +32,31 @@ describe("Groq model selection", () => {
   it("uses the reasoning model for analysis keywords or large context", () => {
     expect(selectChatbotModel({ task: "CLASSIFY_BUG", prompt: "Phân tích root cause và đề xuất hướng xử lý" }, env).model).toBe("reasoning-model");
     expect(selectChatbotModel({ task: "IMPROVE_BUG", prompt: "Viết lại", contextLength: 6_000 }, env).model).toBe("reasoning-model");
+  });
+});
+
+describe("AI answer formatting", () => {
+  it("parses headings and lists without exposing list markers", () => {
+    expect(parseAiAnswer("## Hướng dẫn\n1. **Đăng nhập**\n2. Tạo bug\n\n* **Tiêu đề lỗi**")).toEqual([
+      { type: "heading", text: "Hướng dẫn" },
+      { type: "ordered-list", items: ["**Đăng nhập**", "Tạo bug"] },
+      { type: "unordered-list", items: ["**Tiêu đề lỗi**"] },
+    ]);
+    expect(cleanInlineMarkdown("**Tiêu đề lỗi**")).toBe("Tiêu đề lỗi");
+  });
+
+  it("localizes known accidental German labels", () => {
+    expect(normalizeAiAnswer("1. Beschreiben: lỗi đăng nhập\n* Erwartetes Ergebnis: mở dashboard")).toBe("1. Mô tả: lỗi đăng nhập\n* Kết quả mong đợi: mở dashboard");
+  });
+
+  it("renders safe semantic markup without raw Markdown", () => {
+    const html = renderToStaticMarkup(createElement(AiAnswer, { answer: '1. **Đăng nhập**\n* <script>alert("xss")</script>' }));
+    expect(html).toContain("<ol");
+    expect(html).toContain("<ul");
+    expect(html).toContain("<strong");
+    expect(html).not.toContain("**");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
   });
 });
 

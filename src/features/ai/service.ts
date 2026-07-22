@@ -4,6 +4,7 @@ import type { BugActor } from "@/features/bugs/service";
 import { buildAiContext, aiSystemPrompt } from "@/features/ai/policy";
 import type { AiChatInput } from "@/lib/validators/ai";
 import { selectChatbotModel } from "@/features/ai/model-selector";
+import { normalizeAiAnswer } from "@/features/ai/response-normalizer";
 
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 
@@ -44,7 +45,7 @@ export async function askAi(actor: BugActor, input: AiChatInput) {
     if (response.status === 400) throw new AppError("VALIDATION_ERROR", "GroqCloud từ chối yêu cầu hoặc model đã cấu hình không phù hợp.", 502);
     if (!response.ok) throw new AppError("DATABASE_ERROR", "GroqCloud tạm thời không khả dụng.", 502);
     const body = await response.json() as { choices?: { message?: { content?: string } }[] };
-    const answer = body.choices?.[0]?.message?.content?.trim();
+    const answer = normalizeAiAnswer(body.choices?.[0]?.message?.content ?? "");
     if (!answer) throw new AppError("DATABASE_ERROR", "AI không trả về nội dung hợp lệ.", 502);
     return { answer, task: input.task, model: selection.model, reasoning: selection.reasoning };
   } catch (error) {

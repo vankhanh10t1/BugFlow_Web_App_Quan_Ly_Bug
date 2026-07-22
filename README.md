@@ -91,9 +91,11 @@ Quyền được kiểm tra trong service layer. Việc ẩn nút trên UI khôn
 | `/profile` | Hồ sơ, avatar và mật khẩu |
 | `/settings/security` | Cài đặt bảo mật và recovery code |
 | `/admin/users` | Quản lý người dùng dành cho Admin |
+| `/notifications` | Danh sách và trạng thái đã đọc của thông báo |
+| `/chat` | Chat dự án, chat trực tiếp và kênh hỗ trợ Admin |
 | `/docs` | Tài liệu công khai trong ứng dụng |
 
-Các API chính nằm dưới `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads` và `/api/attachments`.
+Các API chính nằm dưới `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads`, `/api/attachments`, `/api/ai/chat` và `/api/conversations`.
 
 ### Cài đặt local
 
@@ -129,6 +131,10 @@ BUG_ATTACHMENT_MAX_FILES="5"
 AVATAR_MAX_SIZE_MB="5"
 
 CRON_SECRET="a-long-random-secret"
+
+GROQ_API_KEY=""
+GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
 Tạo `AUTH_SECRET` và khóa mã hóa 2FA bằng Node.js:
@@ -138,6 +144,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Mỗi biến phải dùng một giá trị ngẫu nhiên riêng. `TWO_FACTOR_ENCRYPTION_KEY` phải giải mã thành đúng 32 byte.
+
+Ứng dụng hiện dùng `AUTH_URL` cho Auth.js và `NEXT_PUBLIC_APP_URL` cho URL công khai; không đọc biến `APP_URL`. Không thêm prefix `NEXT_PUBLIC_` vào bất kỳ secret nào như `AUTH_SECRET`, `CLOUDINARY_API_SECRET`, `CRON_SECRET` hoặc `GROQ_API_KEY`.
 
 #### 3. Cài đặt và chạy
 
@@ -150,6 +158,8 @@ npm run dev
 ```
 
 Mở `http://localhost:3000`. Runtime dùng pooled `DATABASE_URL`; Prisma migration dùng `DIRECT_URL` qua `prisma.config.ts`.
+
+Khi phát triển migration mới, dùng `npm run db:migrate`. Khi áp dụng migration đã có ở staging/production, dùng `npm run db:deploy`; không dùng `prisma migrate dev` trên production.
 
 ### Tài khoản demo
 
@@ -249,12 +259,13 @@ Trạng thái xác minh gần nhất: 24 test files, 82 tests đạt; Prisma val
 
 ### Deploy lên Vercel
 
-1. Thêm các biến trong `.env.example` vào Vercel.
+1. Thêm các biến cần thiết trong `.env.example` vào Vercel cho đúng scope Production/Preview.
 2. Không đặt `AUTH_URL`/`NEXTAUTH_URL` thành localhost trong Production hoặc Preview. Có thể bỏ `AUTH_URL` để Auth.js dùng request host hiện tại, hoặc đặt domain HTTPS chính xác.
-3. Chạy `npm run db:deploy` trong môi trường release tin cậy.
-4. Redeploy sau khi thay đổi environment variables.
-5. Kiểm tra login bắt buộc 2FA, database read/write, avatar, attachment, cron và HTTP 403/429.
-6. Không lưu upload trên filesystem Vercel và không expose secret qua `NEXT_PUBLIC_*`.
+3. Chạy `npm run db:deploy` trong môi trường release tin cậy để áp dụng migration, gồm migration AI/chat nếu chưa có.
+4. Chạy `npm run build` để xác minh production build trước khi phát hành.
+5. Redeploy sau khi thay đổi environment variables.
+6. Kiểm tra login bắt buộc 2FA, database read/write, avatar, attachment, AI Chatbot, chat, cron và HTTP 403/429.
+7. Không lưu upload trên filesystem Vercel và không expose secret qua `NEXT_PUBLIC_*`.
 
 ### AI Chatbot và Chat nội bộ
 
@@ -285,6 +296,8 @@ Khi deploy Vercel: vào **Project → Settings → Environment Variables**, thê
 
 - Chưa có Playwright E2E cho toàn bộ workflow.
 - Cần tiếp tục kiểm thử production thực tế cho Cloudinary, email/notification và WAF traffic baseline.
+- Chat attachment, presence, typing indicator và managed realtime hiện chưa có; đây là các hướng **đang xem xét**, không phải tính năng đã triển khai.
+- Streaming/cancel phản hồi AI và audit AI nâng cao chưa được triển khai.
 - Không block IP/quốc gia hoặc Challenge toàn ứng dụng nếu chưa có bằng chứng abuse.
 
 ---
@@ -314,6 +327,8 @@ Public user documentation is available at `/docs`. Detailed implementation histo
 - Up to five attachments can be selected in the New Bug form; the Bug is always created before uploads begin.
 - Server-side membership and permission checks to prevent IDOR.
 - Persistent PostgreSQL rate limiting and Same-Origin/CSRF guards for mutation APIs.
+- A GroqCloud AI Chatbot for app guidance, Bug-report improvement, and priority/severity suggestions; transcripts are not persisted and the AI cannot mutate application data.
+- Project, direct, and Admin-support chat persisted in PostgreSQL, with unread/read receipts and 4–5 second polling.
 
 ### Technology
 
@@ -378,9 +393,11 @@ Permissions are enforced in the service layer. Hiding a UI control is never trea
 | `/profile` | Profile, avatar, and password |
 | `/settings/security` | Security settings and recovery codes |
 | `/admin/users` | Admin-only user management |
+| `/notifications` | Notifications and read status |
+| `/chat` | Project, direct, and Admin-support chat |
 | `/docs` | In-app public documentation |
 
-Primary APIs are exposed under `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads`, and `/api/attachments`.
+Primary APIs are exposed under `/api/bugs`, `/api/comments`, `/api/projects`, `/api/notifications`, `/api/admin/users`, `/api/uploads`, `/api/attachments`, `/api/ai/chat`, and `/api/conversations`.
 
 ### Local setup
 
@@ -416,6 +433,10 @@ BUG_ATTACHMENT_MAX_FILES="5"
 AVATAR_MAX_SIZE_MB="5"
 
 CRON_SECRET="a-long-random-secret"
+
+GROQ_API_KEY=""
+GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
 Generate `AUTH_SECRET` and the 2FA encryption key with Node.js:
@@ -425,6 +446,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 Use a different random value for each variable. `TWO_FACTOR_ENCRYPTION_KEY` must decode to exactly 32 bytes.
+
+The application uses `AUTH_URL` for Auth.js and `NEXT_PUBLIC_APP_URL` for its public URL; it does not read `APP_URL`. Never add a `NEXT_PUBLIC_` prefix to secrets such as `AUTH_SECRET`, `CLOUDINARY_API_SECRET`, `CRON_SECRET`, or `GROQ_API_KEY`.
 
 #### 3. Install and run
 
@@ -437,6 +460,8 @@ npm run dev
 ```
 
 Open `http://localhost:3000`. Runtime uses the pooled `DATABASE_URL`; Prisma migrations use `DIRECT_URL` through `prisma.config.ts`.
+
+Use `npm run db:migrate` only when creating migrations during development. Apply existing migrations in staging or production with `npm run db:deploy`; do not use `prisma migrate dev` in production.
 
 ### Demo accounts
 
@@ -536,15 +561,39 @@ Latest verified state: 24 test files and 82 passing tests; Prisma validation/gen
 
 ### Deploying to Vercel
 
-1. Add all variables from `.env.example` to Vercel.
+1. Add the required variables from `.env.example` to the appropriate Production/Preview scopes in Vercel.
 2. Never set `AUTH_URL`/`NEXTAUTH_URL` to localhost in Production or Preview. Remove `AUTH_URL` so Auth.js uses the current request host, or set the exact canonical HTTPS domain.
-3. Run `npm run db:deploy` in a trusted release environment.
-4. Redeploy after changing environment variables.
-5. Verify mandatory 2FA, database reads/writes, avatars, attachments, cron execution, and HTTP 403/429 behavior.
-6. Never store uploads on Vercel's filesystem or expose secrets through `NEXT_PUBLIC_*` variables.
+3. Run `npm run db:deploy` in a trusted release environment, including the AI/chat migration if it has not been applied.
+4. Run `npm run build` before release to verify the production build.
+5. Redeploy after changing environment variables.
+6. Verify mandatory 2FA, database reads/writes, avatars, attachments, the AI Chatbot, chat, cron execution, and HTTP 403/429 behavior.
+7. Never store uploads on Vercel's filesystem or expose secrets through `NEXT_PUBLIC_*` variables.
+
+### AI Chatbot and internal chat
+
+- The dashboard AI launcher supports `GUIDE`, `IMPROVE_BUG`, and `CLASSIFY_BUG`. For Bug context, the client sends only `bugId`; the server loads permitted data after authorization.
+- The AI does not persist transcripts, expose secrets/email/attachment URLs, or mutate application data. GroqCloud is the current provider.
+- `/chat` supports project conversations, direct conversations between active users sharing a project, and Admin support conversations. Messages, unread state, and read receipts are stored in PostgreSQL; updates use 4–5 second polling.
+- Project `VIEWER` members are read-only. Chat attachments, presence, and typing indicators are not implemented.
+
+#### GroqCloud configuration
+
+1. Sign in to the [GroqCloud Console](https://console.groq.com/).
+2. Open **API Keys** and create a new key.
+3. Add the following server-side variables to `.env.local` or Vercel:
+
+```env
+GROQ_API_KEY="your_groq_api_key_here"
+GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_REASONING_MODEL="openai/gpt-oss-120b"
+```
+
+Restart the local server or redeploy Vercel after changing these variables. Never commit the real key or expose it with a `NEXT_PUBLIC_` prefix.
 
 ### Limitations and next steps
 
 - Full workflow Playwright E2E coverage has not been added yet.
 - Live production testing is still needed for Cloudinary, email/notifications, and WAF traffic baselines.
+- Chat attachments, presence, typing indicators, and managed realtime are under consideration and are not implemented.
+- AI response streaming/cancellation and advanced AI auditing are not implemented.
 - Do not block countries/IPs or challenge the entire application without evidence of abuse.
