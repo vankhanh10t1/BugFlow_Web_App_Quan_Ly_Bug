@@ -46,7 +46,15 @@ export async function listChatCandidates(actor: ChatActor) {
     where: { id: { not: actor.id }, accountStatus: "ACTIVE", systemRole: "ADMIN" },
     select: userSelect, orderBy: { fullName: "asc" }, take: 20,
   });
-  return { projects: memberships.filter((item) => item.role !== "VIEWER").map((item) => item.project), directUsers, admins };
+  const projects = actor.systemRole === "ADMIN"
+    ? await prisma.project.findMany({
+      where: { status: { not: "ARCHIVED" } },
+      select: { id: true, code: true, name: true },
+      orderBy: { name: "asc" },
+      take: 100,
+    })
+    : memberships.filter((item) => item.role !== "VIEWER").map((item) => item.project);
+  return { projects, directUsers, admins };
 }
 
 export async function createConversation(actor: ChatActor, input: { type: ChatConversationType; projectId?: string; targetUserId?: string }) {

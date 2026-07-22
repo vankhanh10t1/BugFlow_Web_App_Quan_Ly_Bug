@@ -1772,20 +1772,7 @@
 
 - Runtime không còn truyền `sslmode=require` tới PostgreSQL driver, đồng thời vẫn giữ certificate và hostname verification theo hành vi bảo mật hiện tại.
 
----
 
-#### Thông tin và quy ước từ nhật kí cũ
-
-> Cập nhật gần nhất: 16/07/2026
-> Phạm vi hiện tại: Phase 1 đến Phase 8 đã hoàn thành.
-> Nguồn đối chiếu: Git history, `README.md`, Prisma schema/migration/seed, source code và test hiện có.
-
-
-- Sau khi hoàn thành bất kỳ công việc, phase hoặc lần fix nào trong dự án, phải cập nhật file này theo ngày với đủ: công việc đã làm, bug gặp phải, cách xử lý, file/khu vực liên quan và ghi chú.
-- Không ghi một phase là hoàn thành nếu lint, type-check, test hoặc production build bắt buộc vẫn đang lỗi.
-- Nội dung chưa có bằng chứng từ code, Git history hoặc kết quả kiểm tra phải ghi `Cần xác minh thêm`.
-
----
 
 ## Ngày 22/07/2026
 
@@ -1799,6 +1786,8 @@
 - Siết system prompt để luôn ưu tiên tiếng Việt có dấu và bổ sung chuẩn hóa các nhãn tiếng Đức vô tình xuất hiện trong phản hồi.
 - Cập nhật quy tắc: sau khi hoàn thành bất kỳ công việc nào trong dự án, phải bổ sung nhật kí theo format ngày hiện tại.
 - Gộp nội dung cảnh báo SSL vào nhóm ngày 20/07/2026 và loại bỏ heading ngày bị trùng.
+- Sửa luồng tải trang Chat cho ADMIN/TESTER, bổ sung phân loại lỗi API, logging an toàn và trạng thái loading/error/empty riêng.
+- Đồng bộ quyền ADMIN: có thể chọn mọi dự án chưa lưu trữ để mở chat dự án; không hiển thị lựa chọn Direct/Support mà service không cho phép ADMIN khởi tạo.
 
 ### Bug gặp phải
 
@@ -1806,6 +1795,8 @@
 - AI Chatbot hiển thị trực tiếp Markdown như `**text**`, bullet `*` và đôi khi lẫn nhãn tiếng Đức như `Beschreiben`.
 - Kiểu union ban đầu của block render chưa đủ chi tiết, khiến TypeScript không suy luận được trường `items` của list.
 - Sau khi bổ sung ngày cho mục SSL, nhật kí tạm có hai nhóm `Ngày 20/07/2026` riêng biệt.
+- Trang Chat hiển thị error boundary chung với thông báo database mơ hồ; API chat không log bước lỗi và không phân biệt schema chưa migrate với lỗi server khác.
+- API ứng viên trả danh sách dự án rỗng cho ADMIN dù service cho phép ADMIN tạo chat dự án.
 
 ### Cách xử lý
 
@@ -1815,6 +1806,9 @@
 - Làm sạch marker Markdown lỗi, thêm CSS wrapping/khoảng cách/list marker và tách rõ các biến thể TypeScript.
 - Cập nhật system prompt, chuẩn hóa các nhãn ngoại ngữ đã biết và bổ sung test chống XSS bằng `renderToStaticMarkup`.
 - Gộp năm nhóm nội dung của mục SSL vào nhóm 20/07/2026 hiện có và kiểm tra lại toàn bộ heading ngày.
+- Thêm `chatApiError()` để giữ nguyên 401/403, trả 503 khi Prisma báo thiếu bảng/cột (`P2021`/`P2022`), trả 500 thân thiện cho lỗi không xác định và log ngữ cảnh an toàn.
+- Bổ sung retry, loading, câu `Chưa có cuộc trò chuyện`, thông báo không có quyền và error boundary tiếng Việt riêng cho `/chat`.
+- Kiểm tra database thật: 6 migration đã được áp dụng; query ADMIN/TESTER đều thành công. Không cần migration mới.
 
 ### File/khu vực liên quan
 
@@ -1829,6 +1823,11 @@
 - `src/features/ai/service.ts`
 - `tests/ai-chat-validation.test.ts`
 - `nhat-ki-phases.md` — cập nhật phân nhóm ngày của mục SSL.
+- `src/features/chat/service.ts`, `src/features/chat/api-error.ts`
+- `src/app/api/chat/candidates/route.ts`, `src/app/api/conversations/**`
+- `src/app/(dashboard)/chat/page.tsx`, `loading.tsx`, `error.tsx`
+- `src/components/chat/chat-workspace.tsx`
+- `tests/chat-service.test.ts`
 
 ### Ghi chú
 
@@ -1837,4 +1836,21 @@
 - Kiểm thử production thực tế cho Cloudinary, notification/email và Vercel WAF vẫn cần xác minh thêm.
 - Type-check, ESLint, 24 test files với 85 tests và production build đều thành công.
 - Kiểm thử trình duyệt local không thực hiện được vì môi trường terminal không giữ tiến trình dev nền; semantic HTML, wrapping classes và XSS escaping đã được xác minh bằng test React.
+- Migration Neon đang cấu hình hiện `up to date`. Production/Preview dùng database khác vẫn phải chạy `npm run db:deploy` rồi redeploy Vercel.
+- Chẩn đoán query thật: ADMIN tải được empty conversation hợp lệ; TESTER tải được 3 dự án, 4 người dùng trực tiếp và 2 Admin. Sau sửa, ADMIN có danh sách dự án phù hợp.
+- Type-check, ESLint, 25 test files với 88 tests và production build đều thành công sau bản sửa Chat.
 
+---
+
+#### Thông tin và quy ước từ nhật kí cũ
+
+> Cập nhật gần nhất: 22/07/2026.
+> Phạm vi hiện tại: Phase 1 đến Phase 8 đã hoàn thành.
+> Nguồn đối chiếu: Git history, `README.md`, Prisma schema/migration/seed, source code và test hiện có.
+
+
+- Sau khi hoàn thành bất kỳ công việc, phase hoặc lần fix nào trong dự án, phải cập nhật file này theo ngày với đủ: công việc đã làm, bug gặp phải, cách xử lý, file/khu vực liên quan và ghi chú.
+- Không ghi một phase là hoàn thành nếu lint, type-check, test hoặc production build bắt buộc vẫn đang lỗi.
+- Nội dung chưa có bằng chứng từ code, Git history hoặc kết quả kiểm tra phải ghi `Cần xác minh thêm`.
+
+---
