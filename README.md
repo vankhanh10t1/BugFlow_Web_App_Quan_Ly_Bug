@@ -570,6 +570,15 @@ npm run build
 
 Latest verified state: 28 test files and 94 passing tests; Prisma validation/generation, lint, TypeScript, and the production build all pass.
 
+### Workspace triage cho Bug Management
+
+- `/bugs` và `/my-bugs` hỗ trợ deadline (hôm nay, 7 ngày tới, quá hạn, không deadline), chưa phân công, nhãn, thành phần, phiên bản và giữ filter/sort trên URL.
+- Mỗi user có saved views riêng qua `/api/bug-views`; hỗ trợ tạo, đổi tên, xóa và đặt mặc định. Filter được lưu dạng JSON đã validate.
+- Bảng lỗi hỗ trợ chọn nhiều dòng, bulk assign/priority/status, modal xác nhận và báo lỗi riêng cho từng bug thất bại.
+- Quick edit dùng `/api/bugs/[bugId]/quick-edit`, cập nhật optimistic và rollback khi API từ chối; Kanban tiếp tục dùng optimistic status transition.
+- Metadata triage dùng `BugLabel`, `Component`, `Version` theo project. Chạy `npm run db:deploy` để áp dụng migration `20260818090000_workspace_triage` trước khi deploy app mới.
+- Mọi mutation mới đều kiểm tra session active, same-origin, rate limit, Zod input và quyền project trên server. Bulk action kiểm tra độc lập từng bug, không tin selection từ client.
+
 ### Deploying to Vercel
 
 1. Add the required variables from `.env.example` to the appropriate Production/Preview scopes in Vercel.

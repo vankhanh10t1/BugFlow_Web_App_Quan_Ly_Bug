@@ -73,7 +73,7 @@ describe("chat validation", () => {
     expect(chatMessageSchema.safeParse({ type: "STICKER", sticker: "👍", content: "", priority: "IMPORTANT" }).success).toBe(true);
     expect(chatMessageSchema.safeParse({ type: "GIF", content: "", gifUrl: "https://media.giphy.com/media/example/giphy.gif", gifPreviewUrl: "https://media.giphy.com/media/example/preview.gif", gifWidth: 480, gifHeight: 270, gifProvider: "GIPHY" }).success).toBe(true);
     expect(chatMessageSchema.safeParse({ type: "GIF", content: "", gifUrl: "https://example.com/untrusted.gif", gifWidth: 480, gifHeight: 270, gifProvider: "GIPHY" }).success).toBe(false);
-    expect(chatMessageSchema.safeParse({ type: "REMINDER", content: "Họp dự án", reminderAt: "2026-07-23T02:00:00.000Z" }).success).toBe(true);
+    expect(chatMessageSchema.safeParse({ type: "REMINDER", content: "Họp dự án", reminderAt: "2099-07-23T02:00:00.000Z" }).success).toBe(true);
     expect(chatMessageSchema.safeParse({ type: "REMINDER", content: "Họp dự án" }).success).toBe(false);
     expect(chatMessageActionSchema.safeParse({ action: "RECALL" }).success).toBe(true);
     expect(chatBulkActionSchema.safeParse({ action: "DELETE_FOR_ME", messageIds: ["cm12345678901234567890123"] }).success).toBe(true);

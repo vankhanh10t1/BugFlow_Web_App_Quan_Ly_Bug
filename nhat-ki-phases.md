@@ -771,6 +771,42 @@
 
 ---
 
+## 18/08/2026 — Nâng cấp Bug Management thành Workspace Triage
+
+### Công việc đã làm
+
+- Bổ sung saved views riêng theo user, hỗ trợ tạo/đổi tên/xóa/đặt mặc định và áp dụng lại filter/sort.
+- Mở rộng filter list, My Bugs và query board cho deadline, overdue, unassigned, label, component, version; giữ pagination và URL query params.
+- Bổ sung schema `BugLabel`, `Component`, `Version`, `SavedBugView`, quan hệ nullable với `Bug` và migration tương thích dữ liệu cũ.
+- Bổ sung bảng triage có quick edit assignee/priority/status/deadline/label, optimistic rollback, trạng thái đang lưu và bulk toolbar/modal.
+- Thêm bulk assign/priority/status với validation và permission check từng bug, trả danh sách thành công/thất bại rõ ràng.
+- Bổ sung auth, same-origin/CSRF guard, rate limit và Zod validation cho toàn bộ API mutation mới.
+
+### Bug gặp phải
+
+- Kiểu output Zod ban đầu làm metadata optional trở thành field bắt buộc trong TypeScript, khiến test service cũ không compile.
+- Kiểu label dùng cho metadata filter có `projectId`, trong khi label select từ bug list không cần field này.
+
+### Cách xử lý
+
+- Giữ metadata input optional để tương thích caller cũ và chuẩn hóa mảng label tại service trước khi validate/connect.
+- Tách kiểu label hiển thị trên bug khỏi kiểu metadata filter theo project; chạy lại Prisma generate và type-check.
+
+### File/khu vực liên quan
+
+- `prisma/schema.prisma`, `prisma/migrations/20260818090000_workspace_triage/migration.sql`
+- `src/features/bugs/*`, `src/features/boards/service.ts`, `src/lib/validators/bug.ts`
+- `src/app/api/bug-views/**`, `src/app/api/bugs/bulk`, `src/app/api/bugs/[bugId]/quick-edit`
+- `src/components/bugs/bug-list.tsx`, `triage-workspace.tsx`, `bug-form.tsx`
+- `tests/bug-validation.test.ts`, `README.md`
+
+### Ghi chú
+
+- Quick edit Kanban hiện dùng thao tác kéo thả trạng thái sẵn có; các field khác được quick edit đầy đủ trên bảng list.
+- Cần chạy `npm run db:deploy` trên từng môi trường trước khi phát hành code mới.
+
+---
+
 #### Phase 2 — Neon PostgreSQL và Prisma
 
 

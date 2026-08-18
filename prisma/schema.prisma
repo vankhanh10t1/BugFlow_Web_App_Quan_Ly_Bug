@@ -167,6 +167,7 @@ model User {
   chatMessagesHidden       ChatMessageHidden[]
   chatMessageReactions     ChatMessageReaction[]
   chatReports              ChatReport[]
+  savedBugViews            SavedBugView[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -191,6 +192,10 @@ model Project {
   activities       ActivityLog[]
   notifications    Notification[]
   chatConversation ChatConversation?
+  labels           BugLabel[]
+  components       Component[]
+  versions         Version[]
+  savedBugViews    SavedBugView[]
 
   @@index([status])
   @@index([createdById])
@@ -246,6 +251,11 @@ model Bug {
   attachments        Attachment[]
   activities         ActivityLog[]
   notifications      Notification[]
+  labels             BugLabel[]
+  componentId        String?
+  versionId          String?
+  component          Component?      @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  version            Version?        @relation(fields: [versionId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, sequenceNumber])
   @@index([projectId, status])
@@ -256,6 +266,62 @@ model Bug {
   @@index([dueDate])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([componentId])
+  @@index([versionId])
+}
+
+model BugLabel {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  color     String   @default("#2563eb")
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bugs      Bug[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model Component {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bugs      Bug[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model Version {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bugs      Bug[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+}
+
+model SavedBugView {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String?
+  name      String
+  filters   Json
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId, isDefault])
+  @@index([projectId])
 }
 
 model Comment {

@@ -9,6 +9,15 @@ export type BugActor = { id: string; systemRole: SystemRole };
 const personSelect = { id: true, fullName: true, username: true, avatarUrl: true, email: true } as const;
 
 function dateOrNull(value?: string) { return value ? new Date(`${value}T23:59:59.999Z`) : null; }
+const terminalStatuses = ["RESOLVED", "CLOSED", "REJECTED", "DUPLICATE"] as const;
+function deadlineWhere(deadline?: BugQuery["deadline"]): Prisma.BugWhereInput | undefined {
+  if (!deadline) return undefined;
+  const now = new Date(); const start = new Date(now); start.setHours(0, 0, 0, 0); const end = new Date(start);
+  if (deadline === "today") { end.setDate(end.getDate() + 1); return { dueDate: { gte: start, lt: end } }; }
+  if (deadline === "next7days") { end.setDate(end.getDate() + 8); return { dueDate: { gte: start, lt: end } }; }
+  if (deadline === "none") return { dueDate: null };
+  return { dueDate: { lt: now }, status: { notIn: [...terminalStatuses] } };
+}
 
 async function projectRole(projectId: string, actor: BugActor): Promise<ProjectRole | undefined> {
   if (actor.systemRole === "ADMIN") return undefined;
@@ -44,6 +53,21 @@ export async function listBugPeople(actor: BugActor) {
   });
 }
 
+export async function listTriageMetadata(actor: BugActor, projectId?: string) {
+  const projectWhere = { ...(projectId ? { id: projectId } : {}), ...(actor.systemRole === "ADMIN" ? {} : { members: { some: { userId: actor.id } } }) };
+  const [labels, components, versions] = await Promise.all([
+    prisma.bugLabel.findMany({ where: { project: projectWhere }, select: { id: true, name: true, color: true, projectId: true }, orderBy: { name: "asc" }, take: 300 }),
+    prisma.component.findMany({ where: { project: projectWhere }, select: { id: true, name: true, projectId: true }, orderBy: { name: "asc" }, take: 300 }),
+    prisma.version.findMany({ where: { project: projectWhere }, select: { id: true, name: true, projectId: true }, orderBy: { name: "asc" }, take: 300 }),
+  ]);
+  return { labels, components, versions };
+}
+
+export async function listManagedProjectIds(actor: BugActor) {
+  if (actor.systemRole === "ADMIN") return null;
+  return (await prisma.projectMember.findMany({ where: { userId: actor.id, role: "MANAGER" }, select: { projectId: true } })).map((item) => item.projectId);
+}
+
 export async function listReportableProjects(actor: BugActor) {
   return prisma.project.findMany({
     where: { status: { not: "ARCHIVED" }, ...(actor.systemRole === "ADMIN" ? {} : { members: { some: { userId: actor.id, role: { in: ["MANAGER", "TESTER"] } } } }) },
@@ -51,7 +75,18 @@ export async function listReportableProjects(actor: BugActor) {
   });
 }
 
+async function assertMetadataBelongsToProject(projectId: string, input: { componentId?: string; versionId?: string; labelIds?: string[] }) {
+  const labelIds = input.labelIds ?? [];
+  const [components, versions, labels] = await Promise.all([
+    input.componentId ? prisma.component.count({ where: { id: input.componentId, projectId } }) : 1,
+    input.versionId ? prisma.version.count({ where: { id: input.versionId, projectId } }) : 1,
+    labelIds.length ? prisma.bugLabel.count({ where: { id: { in: labelIds }, projectId } }) : 0,
+  ]);
+  if (!components || !versions || labels !== new Set(labelIds).size) throw new AppError("VALIDATION_ERROR", "Nhãn, thành phần hoặc phiên bản không thuộc dự án của lỗi", 400);
+}
+
 export async function listBugs(actor: BugActor, query: BugQuery & { mine?: boolean }) {
+  const deadline = deadlineWhere(query.deadline ?? (query.overdue ? "overdue" : undefined));
   const where: Prisma.BugWhereInput = {
     deletedAt: null,
     project: actor.systemRole === "ADMIN" ? undefined : { members: { some: { userId: actor.id } } },
@@ -61,15 +96,19 @@ export async function listBugs(actor: BugActor, query: BugQuery & { mine?: boole
     ...(query.priority ? { priority: query.priority } : {}),
     ...(query.severity ? { severity: query.severity } : {}),
     ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
+    ...(query.unassigned ? { assigneeId: null } : {}),
     ...(query.reporterId ? { reporterId: query.reporterId } : {}),
-    ...(query.overdue ? { AND: [{ dueDate: { lt: new Date() } }, { status: { notIn: ["CLOSED", "REJECTED", "DUPLICATE"] } }] } : {}),
+    ...(deadline ?? {}),
+    ...(query.labelId ? { labels: { some: { id: query.labelId } } } : {}),
+    ...(query.componentId ? { componentId: query.componentId } : {}),
+    ...(query.versionId ? { versionId: query.versionId } : {}),
     ...(query.search ? { OR: [{ title: { contains: query.search, mode: "insensitive" } }, { bugCode: { contains: query.search, mode: "insensitive" } }] } : {}),
   };
   const orderBy = { [query.sortBy]: query.sortOrder } as Prisma.BugOrderByWithRelationInput;
   try {
     // These read-only queries do not need transaction isolation. Running them
     // sequentially also avoids a connection spike when a Neon compute wakes up.
-    const items = await prisma.bug.findMany({ where, select: { id: true, bugCode: true, title: true, status: true, priority: true, severity: true, dueDate: true, createdAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect } }, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize });
+    const items = await prisma.bug.findMany({ where, select: { id: true, bugCode: true, title: true, status: true, priority: true, severity: true, dueDate: true, createdAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect }, labels: { select: { id: true, name: true, color: true } }, component: { select: { id: true, name: true } }, version: { select: { id: true, name: true } } }, orderBy, skip: (query.page - 1) * query.pageSize, take: query.pageSize });
     const total = await prisma.bug.count({ where });
     return { items, pagination: { page: query.page, pageSize: query.pageSize, total, totalPages: Math.max(1, Math.ceil(total / query.pageSize)) } };
   } catch (error) {
@@ -82,7 +121,7 @@ export async function getBug(bugId: string, actor: BugActor) {
   const access = await getBugAccessContext(bugId, actor);
   const bug = await prisma.bug.findFirst({
     where: { id: bugId, deletedAt: null },
-    select: { id: true, bugCode: true, title: true, description: true, reproductionSteps: true, expectedResult: true, actualResult: true, environment: true, browser: true, operatingSystem: true, applicationVersion: true, status: true, priority: true, severity: true, dueDate: true, resolvedAt: true, closedAt: true, createdAt: true, updatedAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect }, tester: { select: personSelect } },
+    select: { id: true, bugCode: true, title: true, description: true, reproductionSteps: true, expectedResult: true, actualResult: true, environment: true, browser: true, operatingSystem: true, applicationVersion: true, status: true, priority: true, severity: true, dueDate: true, resolvedAt: true, closedAt: true, createdAt: true, updatedAt: true, project: { select: { id: true, code: true, name: true } }, reporter: { select: personSelect }, assignee: { select: personSelect }, tester: { select: personSelect }, labels: { select: { id: true, name: true, color: true } }, component: { select: { id: true, name: true } }, version: { select: { id: true, name: true } } },
   });
   if (!bug) throw new AppError("RESOURCE_NOT_FOUND", "Bug not found", 404);
   const canManage = canManageProject(actor.systemRole, access.role);
@@ -93,10 +132,11 @@ export async function createBug(actor: BugActor, input: BugInput) {
   const access = await assertProjectAccess(input.projectId, actor);
   if (access.project.status === "ARCHIVED") throw new AppError("VALIDATION_ERROR", "Cannot create bugs in an archived project", 400);
   if (actor.systemRole !== "ADMIN" && access.role !== "MANAGER" && access.role !== "TESTER") throw new AppError("FORBIDDEN", "Only project testers and managers can report bugs", 403);
+  await assertMetadataBelongsToProject(input.projectId, input);
   return prisma.$transaction(async (tx) => {
     const counter = await tx.project.update({ where: { id: input.projectId }, data: { nextBugNumber: { increment: 1 } }, select: { code: true, nextBugNumber: true } });
     const sequenceNumber = counter.nextBugNumber - 1;
-    const bug = await tx.bug.create({ data: { projectId: input.projectId, sequenceNumber, bugCode: `${counter.code}-${String(sequenceNumber).padStart(3, "0")}`, title: input.title, description: input.description, reproductionSteps: input.reproductionSteps || null, expectedResult: input.expectedResult || null, actualResult: input.actualResult || null, environment: input.environment || null, browser: input.browser || null, operatingSystem: input.operatingSystem || null, applicationVersion: input.applicationVersion || null, priority: input.priority, severity: input.severity, reporterId: actor.id, testerId: access.role === "TESTER" ? actor.id : null, dueDate: dateOrNull(input.dueDate) } });
+    const bug = await tx.bug.create({ data: { projectId: input.projectId, sequenceNumber, bugCode: `${counter.code}-${String(sequenceNumber).padStart(3, "0")}`, title: input.title, description: input.description, reproductionSteps: input.reproductionSteps || null, expectedResult: input.expectedResult || null, actualResult: input.actualResult || null, environment: input.environment || null, browser: input.browser || null, operatingSystem: input.operatingSystem || null, applicationVersion: input.applicationVersion || null, priority: input.priority, severity: input.severity, reporterId: actor.id, testerId: access.role === "TESTER" ? actor.id : null, dueDate: dateOrNull(input.dueDate), componentId: input.componentId || undefined, versionId: input.versionId || undefined, labels: { connect: (input.labelIds ?? []).map((id) => ({ id })) } } });
     await tx.activityLog.create({ data: { projectId: input.projectId, bugId: bug.id, actorId: actor.id, actionType: "BUG_CREATED", description: `Created ${bug.bugCode}` } });
     return bug;
   });
@@ -106,8 +146,9 @@ export async function updateBug(bugId: string, actor: BugActor, input: BugUpdate
   const access = await getBugAccessContext(bugId, actor);
   const canManage = canManageProject(actor.systemRole, access.role);
   if (!canManage && !(access.bug.reporterId === actor.id && access.bug.status === "NEW")) throw new AppError("FORBIDDEN", "You cannot edit this bug", 403);
+  await assertMetadataBelongsToProject(access.bug.projectId, input);
   return prisma.$transaction(async (tx) => {
-    const bug = await tx.bug.update({ where: { id: bugId }, data: { title: input.title, description: input.description, reproductionSteps: input.reproductionSteps || null, expectedResult: input.expectedResult || null, actualResult: input.actualResult || null, environment: input.environment || null, browser: input.browser || null, operatingSystem: input.operatingSystem || null, applicationVersion: input.applicationVersion || null, priority: input.priority, severity: input.severity, dueDate: dateOrNull(input.dueDate) } });
+    const bug = await tx.bug.update({ where: { id: bugId }, data: { title: input.title, description: input.description, reproductionSteps: input.reproductionSteps || null, expectedResult: input.expectedResult || null, actualResult: input.actualResult || null, environment: input.environment || null, browser: input.browser || null, operatingSystem: input.operatingSystem || null, applicationVersion: input.applicationVersion || null, priority: input.priority, severity: input.severity, dueDate: dateOrNull(input.dueDate), componentId: input.componentId || null, versionId: input.versionId || null, labels: { set: (input.labelIds ?? []).map((id) => ({ id })) } } });
     await tx.activityLog.create({ data: { projectId: access.bug.projectId, bugId, actorId: actor.id, actionType: "BUG_UPDATED", description: `Updated ${bug.bugCode}` } });
     return bug;
   });
@@ -146,4 +187,17 @@ export async function updateBugPriority(bugId: string, actor: BugActor, priority
 export async function updateBugSeverity(bugId: string, actor: BugActor, severity: BugSeverity) {
   const access = await getBugAccessContext(bugId, actor); if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Only project managers can change severity", 403);
   return prisma.$transaction(async (tx) => { const bug = await tx.bug.update({ where: { id: bugId }, data: { severity } }); await tx.activityLog.create({ data: { projectId: access.bug.projectId, bugId, actorId: actor.id, actionType: "SEVERITY_CHANGED", fieldName: "severity", oldValue: access.bug.severity, newValue: severity, description: "Changed bug severity" } }); return bug; });
+}
+
+export async function updateBugDeadline(bugId: string, actor: BugActor, dueDate: string | null) {
+  const access = await getBugAccessContext(bugId, actor);
+  if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Bạn không có quyền đổi hạn xử lý", 403);
+  return prisma.bug.update({ where: { id: bugId }, data: { dueDate: dueDate ? dateOrNull(dueDate) : null }, select: { id: true, dueDate: true } });
+}
+
+export async function updateBugLabels(bugId: string, actor: BugActor, labelIds: string[]) {
+  const access = await getBugAccessContext(bugId, actor);
+  if (!canManageProject(actor.systemRole, access.role)) throw new AppError("FORBIDDEN", "Bạn không có quyền đổi nhãn", 403);
+  await assertMetadataBelongsToProject(access.bug.projectId, { labelIds });
+  return prisma.bug.update({ where: { id: bugId }, data: { labels: { set: labelIds.map((id) => ({ id })) } }, select: { id: true, labels: { select: { id: true, name: true, color: true } } } });
 }
