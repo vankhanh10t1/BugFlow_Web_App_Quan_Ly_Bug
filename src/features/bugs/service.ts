@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { canAccessProject, canManageProject } from "@/lib/permissions";
 import type { BugInput, BugQuery, BugUpdateInput } from "@/lib/validators/bug";
+import { createNotifications } from "@/features/notifications/service";
 
 export type BugActor = { id: string; systemRole: SystemRole };
 const personSelect = { id: true, fullName: true, username: true, avatarUrl: true, email: true } as const;
@@ -174,7 +175,7 @@ export async function assignBug(bugId: string, actor: BugActor, assigneeId: stri
     const status = assigneeId && access.bug.status === "NEW" ? "ASSIGNED" : !assigneeId ? "NEW" : access.bug.status;
     const bug = await tx.bug.update({ where: { id: bugId }, data: { assigneeId, status } });
     await tx.activityLog.create({ data: { projectId: access.bug.projectId, bugId, actorId: actor.id, actionType: "ASSIGNEE_CHANGED", fieldName: "assigneeId", oldValue: access.bug.assigneeId, newValue: assigneeId, description: assigneeId ? "Assigned the bug" : "Unassigned the bug", metadata: { previousStatus: access.bug.status, status } } });
-    if (assigneeId) await tx.notification.create({ data: { recipientId: assigneeId, actorId: actor.id, bugId, type: "BUG_ASSIGNED", title: `${bug.bugCode} assigned to you`, message: bug.title } });
+    if (assigneeId) await createNotifications([{ recipientId: assigneeId, actorId: actor.id, bugId, projectId: access.bug.projectId, type: "BUG_ASSIGNED", title: `${bug.bugCode} được giao cho bạn`, message: bug.title }], tx);
     return bug;
   });
 }

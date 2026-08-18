@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { canAccessProject, canCreateProject, canManageProject } from "@/lib/permissions";
 import type { ProjectInput, ProjectQuery } from "@/lib/validators/project";
+import { createNotifications } from "@/features/notifications/service";
 
 export type ProjectActor = { id: string; systemRole: SystemRole };
 
@@ -109,7 +110,7 @@ export async function addProjectMember(projectId: string, actor: ProjectActor, u
   return prisma.$transaction(async (tx) => {
     const member = await tx.projectMember.create({ data: { projectId, userId, role }, select: { id: true, role: true, user: { select: memberUserSelect } } });
     await tx.activityLog.create({ data: { projectId, actorId: actor.id, actionType: "MEMBER_ADDED", newValue: userId, description: `Added a project member as ${role}`, metadata: { userId, role } } });
-    await tx.notification.create({ data: { recipientId: userId, actorId: actor.id, projectId, type: "PROJECT_MEMBER_ADDED", title: "Bạn đã được thêm vào dự án", message: `Bạn đã được thêm vào dự án: ${project.name}` } });
+    await createNotifications([{ recipientId: userId, actorId: actor.id, projectId, type: "PROJECT_MEMBER_ADDED", title: "Bạn đã được thêm vào dự án", message: `Bạn đã được thêm vào dự án: ${project.name}` }], tx);
     return member;
   });
 }

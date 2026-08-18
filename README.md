@@ -460,6 +460,14 @@ Use a different random value for each variable. `TWO_FACTOR_ENCRYPTION_KEY` must
 
 The application uses `AUTH_URL` for Auth.js and `NEXT_PUBLIC_APP_URL` for its public URL; it does not read `APP_URL`. Never add a `NEXT_PUBLIC_` prefix to secrets such as `AUTH_SECRET`, `CLOUDINARY_API_SECRET`, `CRON_SECRET`, or `GROQ_API_KEY`.
 
+### Notification preferences and scheduled worker
+
+- Users manage notification types at `/settings/notifications` and can mute individual projects or conversations. Urgent/system notifications bypass mute.
+- `GET/PATCH /api/notifications/preferences` reads or updates only the signed-in user's preferences.
+- `GET/PUT /api/notifications/mutes` reads or updates a project/conversation mute after membership checks.
+- `GET /api/cron/scheduled-notifications` runs the shared deadline, overdue, and chat-reminder worker. Send `Authorization: Bearer $CRON_SECRET`.
+- Vercel invokes the worker every five minutes. Notification `dedupeKey` and `ChatMessage.reminderSentAt` make retries idempotent; the legacy `/api/cron/deadline-notifications` route remains available for compatibility.
+
 #### 3. Install and run
 
 ```bash

@@ -97,6 +97,14 @@ enum NotificationType {
   DUE_DATE_APPROACHING
   BUG_OVERDUE
   CHAT_MESSAGE
+  CHAT_REMINDER
+  URGENT_MESSAGE
+  SYSTEM_NOTIFICATION
+}
+
+enum NotificationMuteTargetType {
+  PROJECT
+  CONVERSATION
 }
 
 enum ChatConversationType {
@@ -168,6 +176,8 @@ model User {
   chatMessageReactions     ChatMessageReaction[]
   chatReports              ChatReport[]
   savedBugViews            SavedBugView[]
+  notificationPreferences  NotificationPreference[]
+  notificationMutes        NotificationMute[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -439,6 +449,31 @@ model Notification {
   @@index([chatMessageId])
 }
 
+model NotificationPreference {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  enabled   Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
+}
+
+model NotificationMute {
+  id         String                     @id @default(cuid())
+  userId     String
+  targetType NotificationMuteTargetType
+  targetId   String
+  createdAt  DateTime                   @default(now())
+  user       User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId, targetType])
+}
+
 model ChatConversation {
   id            String               @id @default(cuid())
   type          ChatConversationType
@@ -498,6 +533,7 @@ model ChatMessage {
   attachmentSize Int?
   attachmentType AttachmentType?
   reminderAt     DateTime?
+  reminderSentAt DateTime?
   pinnedAt       DateTime?
   pinnedById     String?
   recalledAt     DateTime?
@@ -519,6 +555,7 @@ model ChatMessage {
   @@index([conversationId, pinnedAt])
   @@index([conversationId, type, createdAt])
   @@index([reminderAt])
+  @@index([reminderAt, reminderSentAt])
 }
 
 model ChatMessageMark {

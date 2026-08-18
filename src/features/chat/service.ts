@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { AppError } from "@/lib/errors";
 import { deleteAsset, uploadAsset } from "@/lib/cloudinary";
 import { validateAttachment } from "@/lib/validators/attachment";
+import { createNotifications } from "@/features/notifications/service";
 
 export type ChatActor = { id: string; systemRole: SystemRole };
 const userSelect = { id: true, fullName: true, username: true, avatarUrl: true, systemRole: true } as const;
@@ -238,7 +239,7 @@ export async function sendMessage(conversationId: string, actor: ChatActor, inpu
       ? (await tx.projectMember.findMany({ where: { projectId: conversation.projectId, userId: { not: actor.id }, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId)
       : (await tx.chatParticipant.findMany({ where: { conversationId, userId: { not: actor.id }, leftAt: null, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId);
     const preview = input.type === "STICKER" ? "Đã gửi một sticker" : input.type === "GIF" ? "Đã gửi một GIF" : input.type === "REMINDER" ? `Nhắc hẹn: ${input.content}` : input.content;
-    if (recipientIds.length) await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, conversationId, chatMessageId: message.id, type: "CHAT_MESSAGE" as const, title: input.priority === "URGENT" ? "Tin nhắn khẩn cấp" : "Tin nhắn mới", message: preview.slice(0, 120) })) });
+    if (recipientIds.length) await createNotifications(recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, projectId: conversation.projectId, conversationId, chatMessageId: message.id, type: input.priority === "URGENT" ? "URGENT_MESSAGE" as const : "CHAT_MESSAGE" as const, priority: input.priority, title: input.priority === "URGENT" ? "Tin nhắn khẩn cấp" : "Tin nhắn mới", message: preview.slice(0, 120) })), tx);
     return { ...visibleMessage(message, actor.id), deliveryStatus: "SENT" as const };
   });
 }
@@ -259,7 +260,7 @@ export async function sendChatAttachment(conversationId: string, actor: ChatActo
       const recipientIds = conversation.type === "PROJECT" && conversation.projectId
         ? (await tx.projectMember.findMany({ where: { projectId: conversation.projectId, userId: { not: actor.id }, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId)
         : (await tx.chatParticipant.findMany({ where: { conversationId, userId: { not: actor.id }, leftAt: null, user: { accountStatus: "ACTIVE" } }, select: { userId: true } })).map((item) => item.userId);
-      if (recipientIds.length) await tx.notification.createMany({ data: recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, conversationId, chatMessageId: created.id, type: "CHAT_MESSAGE" as const, title: priority === "URGENT" ? "Tệp khẩn cấp" : "Tệp mới trong Chat", message: file.name.slice(0, 120) })) });
+      if (recipientIds.length) await createNotifications(recipientIds.map((recipientId) => ({ recipientId, actorId: actor.id, projectId: conversation.projectId, conversationId, chatMessageId: created.id, type: priority === "URGENT" ? "URGENT_MESSAGE" as const : "CHAT_MESSAGE" as const, priority, title: priority === "URGENT" ? "Tệp khẩn cấp" : "Tệp mới trong Chat", message: file.name.slice(0, 120) })), tx);
       return created;
     });
     return { ...visibleMessage(message, actor.id), deliveryStatus: "SENT" as const };

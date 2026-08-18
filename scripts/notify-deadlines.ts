@@ -7,7 +7,7 @@ async function main() {
   const { prisma } = await import("../src/lib/prisma");
   try {
     const result = await createDeadlineNotifications();
-    console.log(`Deadline notifications: scanned=${result.scannedBugs}, candidates=${result.candidateNotifications}, created=${result.createdNotifications}`);
+    console.log(`Deadline notifications: scanned=${result.scannedBugs}, soon=${result.soonBugs}, overdue=${result.overdueBugs}, created=${result.createdNotifications}, failed=${result.failedItems}`);
   } finally {
     await prisma.$disconnect();
   }

@@ -5,6 +5,7 @@ import { AppError } from "@/lib/errors";
 import { canManageProject } from "@/lib/permissions";
 import { BUG_STATUS_TRANSITIONS, canTransitionBugStatus } from "@/features/bugs/workflow";
 import { getBugAccessContext, type BugActor } from "@/features/bugs/service";
+import { createNotifications } from "@/features/notifications/service";
 
 export function canActorTransition(from: BugStatus, to: BugStatus, actor: BugActor, role: ProjectRole | undefined, assigneeId: string | null) {
   if (!canTransitionBugStatus(from, to)) return false;
@@ -28,7 +29,7 @@ export async function transitionBugStatus(bugId: string, actor: BugActor, status
     const bug = await tx.bug.update({ where: { id: bugId }, data: { status, ...(status === "RESOLVED" ? { resolvedAt: now } : {}), ...(status === "CLOSED" ? { closedAt: now } : {}), ...(status === "REOPENED" ? { closedAt: null } : {}) }, select: { id: true, bugCode: true, title: true, reporterId: true, assigneeId: true, status: true } });
     await tx.activityLog.create({ data: { projectId: context.bug.projectId, bugId, actorId: actor.id, actionType: "STATUS_CHANGED", fieldName: "status", oldValue: from, newValue: status, description: `Changed status from ${from} to ${status}` } });
     const recipients = [...new Set([bug.reporterId, bug.assigneeId].filter((id): id is string => Boolean(id) && id !== actor.id))];
-    if (recipients.length) await tx.notification.createMany({ data: recipients.map((recipientId) => ({ recipientId, actorId: actor.id, bugId, type: "STATUS_CHANGED" as const, title: `${bug.bugCode} status changed`, message: `${from.replaceAll("_", " ")} → ${status.replaceAll("_", " ")}` })) });
+    if (recipients.length) await createNotifications(recipients.map((recipientId) => ({ recipientId, actorId: actor.id, bugId, projectId: context.bug.projectId, type: "STATUS_CHANGED" as const, title: `${bug.bugCode} đã đổi trạng thái`, message: `${from.replaceAll("_", " ")} → ${status.replaceAll("_", " ")}` })), tx);
     return bug;
   });
 }

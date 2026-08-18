@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import { canManageProject } from "@/lib/permissions";
 import { getBugAccessContext, type BugActor } from "@/features/bugs/service";
 import type { CommentInput } from "@/lib/validators/comment";
+import { createNotifications } from "@/features/notifications/service";
 
 const authorSelect = { id: true, fullName: true, username: true, avatarUrl: true } as const;
 const usernames = (content: string) => [...new Set([...content.matchAll(/(^|\s)@([a-z0-9_]{3,30})\b/gi)].map((match) => match[2].toLowerCase()))];
@@ -23,10 +24,10 @@ export async function createComment(bugId: string, actor: BugActor, input: Comme
     const mentionIds = new Set(mentionedUsers.map((user) => user.id).filter((id) => id !== actor.id));
     const watchers = [context.bug.reporterId, context.bug.assigneeId].filter((id): id is string => id !== null).filter((id) => id !== actor.id && !mentionIds.has(id));
     const data = [
-      ...[...mentionIds].map((recipientId) => ({ recipientId, actorId: actor.id, bugId, type: "MENTIONED" as const, title: "You were mentioned in a comment", message: input.content.slice(0, 180) })),
-      ...[...new Set(watchers)].map((recipientId) => ({ recipientId, actorId: actor.id, bugId, type: "COMMENT_ADDED" as const, title: "New bug comment", message: input.content.slice(0, 180) })),
+      ...[...mentionIds].map((recipientId) => ({ recipientId, actorId: actor.id, bugId, projectId: context.bug.projectId, type: "MENTIONED" as const, title: "Bạn được nhắc đến trong bình luận", message: input.content.slice(0, 180) })),
+      ...[...new Set(watchers)].map((recipientId) => ({ recipientId, actorId: actor.id, bugId, projectId: context.bug.projectId, type: "COMMENT_ADDED" as const, title: "Bình luận mới", message: input.content.slice(0, 180) })),
     ];
-    if (data.length) await tx.notification.createMany({ data });
+    if (data.length) await createNotifications(data, tx);
     return comment;
   });
 }

@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing, Camera, CheckCheck, CircleEllipsis, Copy, FileUp, Info, Laugh, MessageCirclePlus, MessagesSquare, Pin, Send, ShieldAlert, Star, Trash2, Undo2, X } from "lucide-react";
 import { polyfillCountryFlagEmojis } from "country-flag-emoji-polyfill";
 import type { SelectedGif } from "@/components/chat/giphy-picker";
+import { NotificationMuteButton } from "@/components/notifications/notification-mute-button";
 
 type User = { id: string; fullName: string; username: string; systemRole: string };
 type Priority = "NORMAL" | "IMPORTANT" | "URGENT";
@@ -244,6 +245,7 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
         </div> : <p className="border-t bg-amber-50 p-4 text-center text-sm text-amber-800">Bạn có quyền xem nhưng không thể gửi tin nhắn trong dự án này.</p>}
       </> : <div className="grid flex-1 place-items-center p-8 text-center"><div><MessagesSquare className="mx-auto size-10 text-slate-300" /><h2 className="mt-4 font-semibold">Chọn một hội thoại</h2><p className="mt-1 text-sm text-slate-500">Tin nhắn được lưu trong hệ thống và cập nhật bằng polling.</p></div></div>}
     </section>
+    {selected ? <div className="border-t bg-slate-50 px-4 py-2 text-right"><NotificationMuteButton targetType="CONVERSATION" targetId={selected.id} /></div> : null}
 
     {showInfo && selected ? <ConversationInfoPanel info={info.data} loading={info.isLoading} error={info.isError ? loadError(info.error, "thông tin hội thoại") : ""} close={() => setShowInfo(false)} updateSettings={(body) => settings.mutate(body)} reportReason={reportReason} setReportReason={setReportReason} submitReport={() => report.mutate()} confirmClear={confirmClear} setConfirmClear={setConfirmClear} /> : null}
   </div>;

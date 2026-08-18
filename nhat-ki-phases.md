@@ -1966,3 +1966,28 @@
 - Nội dung chưa có bằng chứng từ code, Git history hoặc kết quả kiểm tra phải ghi `Cần xác minh thêm`.
 
 ---
+# 18/08/2026 — Notification preferences và scheduled worker
+
+## Công việc đã làm
+
+- Thêm preference theo từng loại notification, API GET/PATCH và trang cài đặt tiếng Việt.
+- Thêm mute/unmute dự án và hội thoại, kiểm tra membership/ownership, same-origin và rate limit.
+- Thêm filter Notification Center theo chưa đọc, mention, deadline, chat, dự án, bug và khẩn cấp/hệ thống; giữ pagination và badge tổng chưa đọc.
+- Gom deadline sắp tới, bug quá hạn và chat reminder vào `/api/cron/scheduled-notifications`, chạy mỗi 5 phút bằng Vercel Cron và bảo vệ bằng `CRON_SECRET`.
+- Bổ sung idempotency bằng `Notification.dedupeKey` và `ChatMessage.reminderSentAt`; lỗi từng item không làm dừng toàn job.
+
+## Bug gặp phải và cách xử lý
+
+- Mock Prisma cũ chưa có delegate preference/mute: service dùng mặc định rỗng khi delegate không tồn tại trong test double, không ảnh hưởng Prisma runtime đã generate.
+- Production build trong sandbox không tải được Google Fonts; typecheck vẫn đạt, cần chạy lại build ở môi trường có network.
+
+## File/khu vực liên quan
+
+- `prisma/schema.prisma`, migration `20260818150000_notification_preferences_worker`.
+- `src/features/notifications/*`, `src/app/api/notifications/*`, `src/app/api/cron/*`.
+- Notification Center, trang settings notification, project settings và chat workspace.
+- `vercel.json`, `.env.example`, `README.md`.
+
+## Ghi chú
+
+- Chưa gửi email ở phase này; service trung tâm là điểm mở rộng channel sau này.
