@@ -1,5 +1,33 @@
 # Nhật kí dự án BugFlow
 
+## Ngày 18/08/2026 — Sửa kiểm tra cron production và domain Vercel
+
+### Công việc đã làm
+
+- Xác minh route App Router `GET /api/cron/scheduled-notifications` được build và tồn tại trên production.
+- Phân biệt lỗi thiếu cấu hình `CRON_SECRET` (`500`) với Bearer secret thiếu/sai (`401`), chuẩn hóa JSON thành công và thêm log server-side không chứa secret.
+- Thêm test cho cấu hình thiếu, sai secret và worker chạy thành công.
+
+### Bug gặp phải
+
+- URL `bug-flow.vercel.app` trả `404 DEPLOYMENT_NOT_FOUND`; URL đôi khi bị copy dưới dạng Markdown `[text](url)`.
+
+### Cách xử lý
+
+- Kiểm tra Vercel deployment/alias và xác định production domain đúng là `bug-flow-web-app-quan-ly-bug.vercel.app`.
+- Gọi trực tiếp domain đúng xác nhận `X-Matched-Path: /api/cron/scheduled-notifications` và HTTP `401` khi chưa gửi secret.
+- Cập nhật README với lệnh PowerShell dùng URL thuần và hướng dẫn external scheduler cho Vercel Hobby.
+
+### File/khu vực liên quan
+
+- `src/app/api/cron/scheduled-notifications/route.ts`
+- `tests/scheduled-notifications-route.test.ts`
+- `README.md`, `.env.example`, Vercel project/production alias
+
+### Ghi chú
+
+- Không thêm Vercel Cron vào `vercel.json` vì Hobby chỉ hỗ trợ lịch chạy một lần mỗi ngày; external scheduler tiếp tục gọi route mỗi 5 phút.
+
 > Nội dung được nhóm theo ngày có trong nhật kí cũ; các mục hiện đã có ngày đối chiếu rõ ràng.
 
 ## Ngày 16/07/2026

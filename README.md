@@ -466,7 +466,25 @@ The application uses `AUTH_URL` for Auth.js and `NEXT_PUBLIC_APP_URL` for its pu
 - `GET/PATCH /api/notifications/preferences` reads or updates only the signed-in user's preferences.
 - `GET/PUT /api/notifications/mutes` reads or updates a project/conversation mute after membership checks.
 - `GET /api/cron/scheduled-notifications` runs the shared deadline, overdue, and chat-reminder worker. Send `Authorization: Bearer $CRON_SECRET`.
-- Vercel invokes the worker every five minutes. Notification `dedupeKey` and `ChatMessage.reminderSentAt` make retries idempotent; the legacy `/api/cron/deadline-notifications` route remains available for compatibility.
+- Vercel Hobby does not schedule this route. Configure an external scheduler to call it every five minutes. Notification `dedupeKey` and `ChatMessage.reminderSentAt` make retries idempotent; the legacy `/api/cron/deadline-notifications` route remains available for compatibility.
+
+Production currently uses `https://bug-flow-web-app-quan-ly-bug.vercel.app`. The older `https://bug-flow.vercel.app` alias is not attached to the current project and returns Vercel `DEPLOYMENT_NOT_FOUND` before the request reaches Next.js. Always copy the plain URL; Markdown such as `[text](url)` is not a valid PowerShell URI.
+
+Test the production route from PowerShell:
+
+```powershell
+$cronSecret = Read-Host "Nhap CRON_SECRET"
+$headers = @{
+  Authorization = "Bearer $cronSecret"
+}
+
+Invoke-RestMethod `
+  -Uri "https://bug-flow-web-app-quan-ly-bug.vercel.app/api/cron/scheduled-notifications" `
+  -Method Get `
+  -Headers $headers
+```
+
+Missing or invalid credentials return `401`. A valid request returns `{ "ok": true, "processed": ... }`. If `CRON_SECRET` is absent from the Production environment, the route returns `500` with a configuration message and logs no secret. Add or update the variable under Vercel Project Settings → Environment Variables, then redeploy.
 
 #### 3. Install and run
 
