@@ -200,7 +200,7 @@ function visibleMessage(message: MessageRow, actorId: string) {
   };
 }
 
-export async function listMessages(conversationId: string, actor: ChatActor, options: { cursor?: string; after?: Date; limit?: number }) {
+export async function listMessages(conversationId: string, actor: ChatActor, options: { cursor?: string; after?: Date; afterId?: string; limit?: number }) {
   await context(conversationId, actor);
   const now = new Date();
   const participant = await prisma.chatParticipant.upsert({
@@ -214,14 +214,43 @@ export async function listMessages(conversationId: string, actor: ChatActor, opt
   const where: Prisma.ChatMessageWhereInput = { conversationId, deletedAt: null, hiddenFor: { none: { userId: actor.id } }, ...(cutoff ? { createdAt: { gt: cutoff } } : {}) };
   const limit = Math.min(Math.max(options.limit ?? 30, 1), 100);
   const receipts = await prisma.chatParticipant.findMany({ where: { conversationId, leftAt: null }, select: { userId: true, lastDeliveredAt: true, lastReadAt: true } });
-  if (options.after) {
-    const rows = await prisma.chatMessage.findMany({ where: { ...where, createdAt: { ...(where.createdAt as Prisma.DateTimeFilter | undefined), gt: options.after } }, select: messageSelect(actor.id), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit });
-    return rows.map((message) => ({ ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) }));
+  if (options.after || options.afterId) {
+    let afterCreatedAt = options.after;
+    const afterId = options.afterId;
+    if (!afterCreatedAt && afterId) {
+      const anchor = await prisma.chatMessage.findFirst({ where: { id: afterId, conversationId }, select: { createdAt: true } });
+      if (!anchor) throw new AppError("VALIDATION_ERROR", "Mốc tin nhắn không hợp lệ", 400);
+      afterCreatedAt = anchor.createdAt;
+    }
+    const incrementalWhere: Prisma.ChatMessageWhereInput = afterCreatedAt ? {
+      ...where,
+      AND: [
+        ...(where.createdAt ? [{ createdAt: where.createdAt as Prisma.DateTimeFilter }] : []),
+        afterId
+          ? { OR: [{ createdAt: { gt: afterCreatedAt } }, { createdAt: afterCreatedAt, id: { gt: afterId } }] }
+          : { createdAt: { gt: afterCreatedAt } },
+      ],
+      createdAt: undefined,
+    } : where;
+    const rows = await prisma.chatMessage.findMany({ where: incrementalWhere, select: messageSelect(actor.id), orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: limit + 1 });
+    const hasMore = rows.length > limit;
+    const items = rows.slice(0, limit).map((message) => ({ ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) }));
+    return { items, hasMore, nextAfter: items.at(-1)?.id ?? afterId ?? null };
   }
   const rows = await prisma.chatMessage.findMany({ where, select: messageSelect(actor.id), orderBy: [{ createdAt: "desc" }, { id: "desc" }], ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}), take: limit + 1 });
   const hasMore = rows.length > limit;
   const items = rows.slice(0, limit).reverse().map((message) => ({ ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) }));
   return { items, nextCursor: hasMore ? rows[limit - 1]?.id ?? null : null };
+}
+
+export async function getVisibleMessage(conversationId: string, messageId: string, actor: ChatActor) {
+  await context(conversationId, actor);
+  const [message, receipts] = await Promise.all([
+    prisma.chatMessage.findFirst({ where: { id: messageId, conversationId, deletedAt: null, hiddenFor: { none: { userId: actor.id } } }, select: messageSelect(actor.id) }),
+    prisma.chatParticipant.findMany({ where: { conversationId, leftAt: null }, select: { userId: true, lastDeliveredAt: true, lastReadAt: true } }),
+  ]);
+  if (!message) return null;
+  return { ...visibleMessage(message, actor.id), deliveryStatus: deliveryStatus(message, actor, receipts) };
 }
 
 export type SendChatMessageInput = { content: string; clientId?: string; type: "TEXT" | "EMOJI" | "STICKER" | "GIF" | "REMINDER"; priority: ChatMessagePriority; sticker?: string; gifUrl?: string; gifPreviewUrl?: string; gifWidth?: number; gifHeight?: number; gifProvider?: "GIPHY"; reminderAt?: Date };
@@ -301,19 +330,19 @@ async function reactionSummary(messageId: string, actorId: string) {
 }
 
 export async function setMessageReaction(messageId: string, actor: ChatActor, emoji: string) {
-  await reactionMessage(messageId, actor);
+  const message = await reactionMessage(messageId, actor);
   await prisma.chatMessageReaction.upsert({
     where: { messageId_userId: { messageId, userId: actor.id } },
     create: { messageId, userId: actor.id, emoji },
     update: { emoji },
   });
-  return reactionSummary(messageId, actor.id);
+  return { ...(await reactionSummary(messageId, actor.id)), conversationId: message.conversationId };
 }
 
 export async function removeMessageReaction(messageId: string, actor: ChatActor) {
-  await reactionMessage(messageId, actor);
+  const message = await reactionMessage(messageId, actor);
   await prisma.chatMessageReaction.deleteMany({ where: { messageId, userId: actor.id } });
-  return reactionSummary(messageId, actor.id);
+  return { ...(await reactionSummary(messageId, actor.id)), conversationId: message.conversationId };
 }
 
 export async function bulkMessageAction(conversationId: string, actor: ChatActor, messageIds: string[], action: "MARK" | "UNMARK" | "DELETE_FOR_ME") {
@@ -362,4 +391,12 @@ export async function markConversationRead(conversationId: string, actor: ChatAc
   await context(conversationId, actor);
   const now = new Date();
   return prisma.chatParticipant.upsert({ where: { conversationId_userId: { conversationId, userId: actor.id } }, create: { conversationId, userId: actor.id, lastReadAt: now, lastDeliveredAt: now }, update: { lastReadAt: now, lastDeliveredAt: now, leftAt: null } });
+}
+
+export async function getConversationReceipts(conversationId: string, actor: ChatActor) {
+  await context(conversationId, actor);
+  return prisma.chatParticipant.findMany({
+    where: { conversationId, leftAt: null },
+    select: { userId: true, lastDeliveredAt: true, lastReadAt: true },
+  });
 }

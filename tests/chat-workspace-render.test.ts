@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({ usePathname: () => "/chat" }));
 
 import { QueryProvider } from "@/components/providers/query-provider";
-import { ChatWorkspace, mergeChatMessages, regionalFlagCode } from "@/components/chat/chat-workspace";
+import { ChatWorkspace, mergeChatMessages, mergeIncrementalMessages, regionalFlagCode } from "@/components/chat/chat-workspace";
 import { emojiValue, flagCode } from "@/components/chat/emoji-mart-picker";
 
 describe("chat workspace initialization", () => {
@@ -39,5 +39,16 @@ describe("chat emoji flag fallback", () => {
     const base = { content: "", type: "GIF", priority: "NORMAL", createdAt: "2026-07-22T00:00:00.000Z", sender: { id: "user-1", fullName: "User", username: "user", systemRole: "TESTER" }, gifUrl: "https://media.giphy.com/media/example/giphy.gif" } as ChatMessage;
     const merged = mergeChatMessages([{ ...base, id: "server-id", clientId: "same-client-id" }], [{ ...base, id: "same-client-id", clientId: "same-client-id", pending: true }]);
     expect(merged.map((message) => message.id)).toEqual(["server-id"]);
+  });
+
+  it("deduplicates incremental messages and keeps timestamp/id order", () => {
+    type ChatMessage = Parameters<typeof mergeIncrementalMessages>[0][number];
+    const base = { content: "", type: "TEXT", priority: "NORMAL", createdAt: "2026-08-18T00:00:00.000Z", sender: { id: "user-1", fullName: "User", username: "user", systemRole: "TESTER" } } as ChatMessage;
+    const merged = mergeIncrementalMessages(
+      [{ ...base, id: "b", content: "old" }],
+      [{ ...base, id: "c" }, { ...base, id: "a" }, { ...base, id: "b", content: "updated" }],
+    );
+    expect(merged.map((message) => message.id)).toEqual(["a", "b", "c"]);
+    expect(merged[1]?.content).toBe("updated");
   });
 });

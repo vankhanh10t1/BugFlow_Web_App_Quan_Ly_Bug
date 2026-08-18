@@ -2019,3 +2019,34 @@
 ## Ghi chú
 
 - Chưa gửi email ở phase này; service trung tâm là điểm mở rộng channel sau này.
+
+---
+
+# 18/08/2026 — Nâng cấp Chat realtime theo 3 phase
+
+## Công việc đã làm
+
+- Phase 1: dừng polling khi tab ẩn, resume khi focus, giãn interval sau 30 giây idle; message API hỗ trợ incremental cursor bằng ID và cặp `(createdAt, id)` để không mất tin khi timestamp trùng; client merge theo ID và giữ thứ tự ổn định.
+- Phase 2: tích hợp Ably managed realtime cho Vercel serverless; phát event message, reaction, read receipt và revoke/update sau khi PostgreSQL mutation thành công. Token route kiểm tra auth/membership và chỉ cấp capability đúng hai channel của conversation. Adaptive polling tiếp tục làm fallback khi thiếu key hoặc mất kết nối.
+- Phase 3: thêm typing throttle 2 giây, tự xóa sau 5 giây, không hiển thị chính mình; thêm online presence qua Ably presence TTL và cleanup connection/listener khi đổi conversation hoặc ẩn tab.
+- Cập nhật README, `.env.example` và dependency `ably`.
+
+## Bug gặp phải và cách xử lý
+
+- Incremental timestamp đơn thuần có thể bỏ sót bản ghi cùng millisecond: server resolve message ID thành timestamp rồi lọc `createdAt > anchor OR (createdAt = anchor AND id > anchorId)`.
+- SSE thuần không broadcast tin cậy qua nhiều Vercel serverless instance: chọn managed pub/sub thay vì tự dựng WebSocket/SSE broker.
+- Client được publish typing nhưng không được phép giả event dữ liệu: tách channel event chỉ `subscribe` và channel presence/typing có `publish/presence`.
+- Ably không được cấu hình ở local vẫn trả 503 cho token route; client bắt lỗi và tiếp tục polling, không crash chat.
+
+## File/khu vực liên quan
+
+- `src/features/chat/service.ts`, `src/features/chat/realtime.ts`.
+- `src/components/chat/chat-workspace.tsx`.
+- `src/app/api/chat/realtime-token`, reaction API và các conversation message/read/action API.
+- `package.json`, `package-lock.json`, `.env.example`, `README.md`.
+
+## Ghi chú
+
+- Cần đặt `ABLY_API_KEY` server-only ở Vercel Production/Preview để bật Phase 2–3; không cần env public.
+- Delete-for-me là local state theo user; event không làm ẩn tin ở client khác. Polling incremental vẫn là fallback an toàn.
+- Đã đạt type-check, 30 test files/109 tests, ESLint không có error (còn 1 warning cũ ở notification service) và production build Next.js thành công.

@@ -5,6 +5,7 @@ import { enforceUserMutationLimit } from "@/lib/rate-limit";
 import { AppError } from "@/lib/errors";
 import { sendChatAttachment, type ChatActor } from "@/features/chat/service";
 import { chatApiError } from "@/features/chat/api-error";
+import { publishChatEvent } from "@/features/chat/realtime";
 
 export async function POST(request: Request, { params }: { params: Promise<{ conversationId: string }> }) {
   let actor: ChatActor | null = null;
@@ -18,6 +19,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ con
     const priorityRaw = form.get("priority");
     const priority = priorityRaw === "IMPORTANT" || priorityRaw === "URGENT" ? priorityRaw : "NORMAL";
     const clientId = typeof form.get("clientId") === "string" ? String(form.get("clientId")) : undefined;
-    return apiSuccess(await sendChatAttachment((await params).conversationId, actor, file, priority, clientId), "Đã gửi tệp", 201);
-  } catch (error) { return chatApiError(error, { actor, step: "send-attachment" }); }
+    const { conversationId } = await params;
+    const message = await sendChatAttachment(conversationId, actor, file, priority, clientId);
+    await publishChatEvent({ type: "message.created", conversationId, messageId: message.id, actorId: actor.id });
+    return apiSuccess(message, "Đã gửi tệp", 201);
+  } catch (error) {
+    return chatApiError(error, { actor, step: "send-attachment" });
+  }
 }

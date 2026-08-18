@@ -6,6 +6,7 @@ import { assertSameOriginRequest } from "@/lib/request-security";
 import { chatReactionSchema } from "@/lib/validators/chat";
 import { chatApiError } from "@/features/chat/api-error";
 import { removeMessageReaction, setMessageReaction, type ChatActor } from "@/features/chat/service";
+import { publishChatEvent } from "@/features/chat/realtime";
 
 export async function POST(request: Request, { params }: { params: Promise<{ messageId: string }> }) {
   let actor: ChatActor | null = null;
@@ -16,10 +17,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ mes
     const input = chatReactionSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", input.error.issues[0]?.message ?? "Cảm xúc không hợp lệ", 400);
     const { messageId } = await params;
-    return apiSuccess(await setMessageReaction(messageId, actor, input.data.emoji), "Đã cập nhật cảm xúc");
-  } catch (error) {
-    return chatApiError(error, { actor, step: "set-message-reaction" });
-  }
+    const summary = await setMessageReaction(messageId, actor, input.data.emoji);
+    await publishChatEvent({ type: "reaction.updated", conversationId: summary.conversationId, messageId, actorId: actor.id });
+    return apiSuccess(summary, "Đã cập nhật cảm xúc");
+  } catch (error) { return chatApiError(error, { actor, step: "set-message-reaction" }); }
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ messageId: string }> }) {
@@ -29,8 +30,8 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ m
     actor = await requireActiveUser();
     await enforceUserMutationLimit("chat:message:reaction", actor.id, 60);
     const { messageId } = await params;
-    return apiSuccess(await removeMessageReaction(messageId, actor), "Đã bỏ cảm xúc");
-  } catch (error) {
-    return chatApiError(error, { actor, step: "remove-message-reaction" });
-  }
+    const summary = await removeMessageReaction(messageId, actor);
+    await publishChatEvent({ type: "reaction.updated", conversationId: summary.conversationId, messageId, actorId: actor.id });
+    return apiSuccess(summary, "Đã bỏ cảm xúc");
+  } catch (error) { return chatApiError(error, { actor, step: "remove-message-reaction" }); }
 }

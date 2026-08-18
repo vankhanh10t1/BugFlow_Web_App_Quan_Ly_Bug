@@ -13,6 +13,7 @@ export async function GET() {
     ]);
     return apiSuccess({
       currentUser: { id: actor.id, systemRole: actor.systemRole },
+      realtimeEnabled: Boolean(process.env.ABLY_API_KEY),
       conversations,
       candidates,
     }, "Đã khởi tạo Chat");

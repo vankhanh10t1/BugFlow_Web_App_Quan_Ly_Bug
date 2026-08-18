@@ -14,11 +14,13 @@ type Priority = "NORMAL" | "IMPORTANT" | "URGENT";
 type Delivery = "UNSENT" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 type MessageType = "TEXT" | "EMOJI" | "STICKER" | "GIF" | "IMAGE" | "FILE" | "REMINDER";
 type ReactionSummary = { emoji: string; count: number; reactedByMe: boolean };
-type Conversation = { id: string; type: "PROJECT" | "DIRECT" | "SUPPORT"; displayName: string; unreadCount: number; canSend: boolean; updatedAt: string; messages: { content: string; createdAt: string }[] };
+type Conversation = { id: string; type: "PROJECT" | "DIRECT" | "SUPPORT"; displayName: string; unreadCount: number; canSend: boolean; updatedAt: string; participants?: { userId: string; user: User }[]; messages: { content: string; createdAt: string }[] };
 type Message = { id: string; clientId?: string | null; content: string; type: MessageType; priority: Priority; sticker?: string | null; gifUrl?: string | null; gifPreviewUrl?: string | null; gifWidth?: number | null; gifHeight?: number | null; gifProvider?: string | null; attachmentUrl?: string | null; attachmentName?: string | null; attachmentMime?: string | null; attachmentSize?: number | null; reminderAt?: string | null; pinnedAt?: string | null; recalledAt?: string | null; marked?: boolean; reactions?: ReactionSummary[]; myReaction?: string | null; deliveryStatus?: Delivery | null; createdAt: string; sender: User; pending?: boolean; failed?: boolean };
 type Envelope<T> = { success: boolean; message: string; data: T };
 type Candidates = { projects: { id: string; code: string; name: string }[]; directUsers: User[]; admins: User[] };
-type ChatInit = { currentUser: { id: string; systemRole: string }; conversations: Conversation[]; candidates: Candidates };
+type ChatInit = { currentUser: { id: string; systemRole: string }; realtimeEnabled: boolean; conversations: Conversation[]; candidates: Candidates };
+type RealtimeEvent = { id: string; type: string; conversationId: string; messageId?: string; actorId: string };
+type ReceiptState = { userId: string; lastDeliveredAt: string | null; lastReadAt: string | null };
 type ConversationInfo = {
   reminders: Message[];
   media: Message[];
@@ -32,6 +34,38 @@ export function mergeChatMessages(serverMessages: Message[], pendingMessages: Me
   const persistedClientIds = new Set(serverMessages.map((message) => message.clientId).filter(Boolean));
   const visiblePending = pendingMessages.filter((message) => !message.clientId || !persistedClientIds.has(message.clientId));
   return [...new Map([...serverMessages, ...visiblePending].map((message) => [message.id, message])).values()];
+}
+
+type MessagePage = { items: Message[]; nextCursor?: string | null; nextAfter?: string | null; hasMore?: boolean };
+
+export function mergeIncrementalMessages(current: Message[], incoming: Message[]) {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, { ...byId.get(message.id), ...message });
+  return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+function useAdaptivePolling() {
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState === "visible");
+  const [idle, setIdle] = useState(false);
+  useEffect(() => {
+    let idleTimer: ReturnType<typeof setTimeout>;
+    const armIdleTimer = () => {
+      setIdle(false);
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => setIdle(true), 30_000);
+    };
+    const visibility = () => { setVisible(document.visibilityState === "visible"); if (document.visibilityState === "visible") armIdleTimer(); };
+    const activity = () => armIdleTimer();
+    document.addEventListener("visibilitychange", visibility);
+    for (const name of ["pointerdown", "keydown", "focus"] as const) window.addEventListener(name, activity, { passive: true });
+    armIdleTimer();
+    return () => {
+      clearTimeout(idleTimer);
+      document.removeEventListener("visibilitychange", visibility);
+      for (const name of ["pointerdown", "keydown", "focus"] as const) window.removeEventListener(name, activity);
+    };
+  }, []);
+  return { visible, idle };
 }
 
 class ChatRequestError extends Error {
@@ -64,11 +98,12 @@ export function ChatWorkspace({ initialConversationId }: { initialConversationId
   const init = useQuery({ queryKey: ["chat", "init"], queryFn: () => json<ChatInit>("/api/chat/init"), retry: false });
   if (init.isPending || (init.isError && init.isFetching)) return <div className="grid min-h-[70vh] place-items-center rounded-2xl border bg-white"><p className="text-sm text-slate-500">Đang khởi tạo Chat…</p></div>;
   if (init.isError) return <div className="grid min-h-[70vh] place-items-center rounded-2xl border bg-white p-6"><div className="max-w-md text-center"><h2 className="font-semibold">Không thể khởi tạo Chat</h2><p className="mt-2 text-sm text-red-700">{loadError(init.error, "dữ liệu Chat")}</p><button type="button" onClick={() => void init.refetch()} className="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Thử lại</button></div></div>;
-  return <ChatWorkspaceReady currentUserId={init.data.currentUser.id} currentUserRole={init.data.currentUser.systemRole} initialConversationId={initialConversationId} initialConversations={init.data.conversations} initialCandidates={init.data.candidates} />;
+  return <ChatWorkspaceReady currentUserId={init.data.currentUser.id} currentUserRole={init.data.currentUser.systemRole} realtimeEnabled={init.data.realtimeEnabled} initialConversationId={initialConversationId} initialConversations={init.data.conversations} initialCandidates={init.data.candidates} />;
 }
 
-function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversationId, initialConversations, initialCandidates }: { currentUserId: string; currentUserRole: string; initialConversationId?: string; initialConversations: Conversation[]; initialCandidates: Candidates }) {
+function ChatWorkspaceReady({ currentUserId, currentUserRole, realtimeEnabled, initialConversationId, initialConversations, initialCandidates }: { currentUserId: string; currentUserRole: string; realtimeEnabled: boolean; initialConversationId?: string; initialConversations: Conversation[]; initialCandidates: Candidates }) {
   const client = useQueryClient();
+  const polling = useAdaptivePolling();
   const fileInput = useRef<HTMLInputElement>(null);
   const pickerArea = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState(initialConversationId ?? "");
@@ -88,6 +123,11 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
   const [selectedMessages, setSelectedMessages] = useState<Set<string>>(new Set());
   const [reportReason, setReportReason] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const realtimeChannel = useRef<{ publish: (name: string, data: object) => Promise<unknown> } | null>(null);
+  const lastTypingAt = useRef(0);
 
   useEffect(() => {
     polyfillCountryFlagEmojis();
@@ -104,18 +144,118 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
     return () => document.removeEventListener("pointerdown", closePickers);
   }, []);
 
-  const conversations = useQuery({ queryKey: ["chat", "conversations"], queryFn: () => json<Conversation[]>("/api/conversations"), initialData: initialConversations, refetchInterval: 5_000 });
+  const conversations = useQuery({ queryKey: ["chat", "conversations"], queryFn: () => json<Conversation[]>("/api/conversations"), initialData: initialConversations, refetchInterval: polling.visible ? (polling.idle ? 60_000 : 15_000) : false, refetchOnWindowFocus: true });
   const candidates = useQuery({ queryKey: ["chat", "candidates"], queryFn: () => json<Candidates>("/api/chat/candidates"), initialData: initialCandidates });
   const conversationItems = Array.isArray(conversations.data) ? conversations.data : [];
   const activeId = selectedId || conversationItems[0]?.id || "";
   const selected = conversationItems.find((item) => item.id === activeId);
-  const messages = useQuery({ queryKey: ["chat", "messages", activeId], enabled: Boolean(activeId), queryFn: () => json<{ items: Message[]; nextCursor: string | null }>(`/api/conversations/${activeId}/messages?limit=100`), refetchInterval: 4_000 });
+  const typingNames = typingUserIds.map((id) => selected?.participants?.find((participant) => participant.userId === id)?.user.fullName ?? "Một thành viên");
+  const messages = useQuery({
+    queryKey: ["chat", "messages", activeId],
+    enabled: Boolean(activeId),
+    queryFn: async () => {
+      const key = ["chat", "messages", activeId] as const;
+      const current = client.getQueryData<MessagePage>(key);
+      const last = current?.items.filter((message) => !message.pending && !message.failed).at(-1);
+      if (!last) return json<MessagePage>(`/api/conversations/${activeId}/messages?limit=100`);
+      const incremental = await json<MessagePage>(`/api/conversations/${activeId}/messages?after=${encodeURIComponent(last.id)}&limit=100`);
+      return { ...current, ...incremental, items: mergeIncrementalMessages(current?.items ?? [], incremental.items) };
+    },
+    refetchInterval: polling.visible ? (polling.idle ? 20_000 : 4_000) : false,
+    refetchOnWindowFocus: true,
+  });
   const info = useQuery({ queryKey: ["chat", "info", activeId], enabled: Boolean(activeId && showInfo), queryFn: () => json<ConversationInfo>(`/api/conversations/${activeId}/info`) });
 
   useEffect(() => {
+    if (!activeId || !polling.visible || !realtimeEnabled) return;
+    let cancelled = false;
+    const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    let closeRealtime: (() => void) | undefined;
+    void import("ably").then(({ Realtime }) => {
+      if (cancelled) return;
+      const realtime = new Realtime({
+        authCallback: (_params, callback) => {
+          void fetch(`/api/chat/realtime-token?conversationId=${encodeURIComponent(activeId)}`)
+            .then(async (response) => {
+              const body = await response.json() as Envelope<unknown>;
+              if (!response.ok) throw new Error(body.message);
+              callback(null, body.data as Parameters<typeof callback>[1]);
+            })
+            .catch((error: unknown) => callback(error instanceof Error ? error.message : "Realtime auth failed", null));
+        },
+      });
+      const events = realtime.channels.get(`private:chat:${activeId}`);
+      const presence = realtime.channels.get(`private:chat-presence:${activeId}`);
+      const refreshPresence = () => void presence.presence.get().then((members) => setOnlineUserIds([...new Set(members.map((member) => member.clientId).filter((id): id is string => Boolean(id && id !== currentUserId)))]));
+      void events.subscribe(async (incoming) => {
+        const event = incoming.data as RealtimeEvent;
+        if (!event?.id || event.conversationId !== activeId) return;
+        if (event.type === "message.created") {
+          await messages.refetch();
+        } else if (event.type === "receipt.updated") {
+          const receipts = await json<ReceiptState[]>(`/api/conversations/${activeId}/read`);
+          const recipients = receipts.filter((receipt) => receipt.userId !== currentUserId);
+          client.setQueryData<MessagePage>(["chat", "messages", activeId], (current) => current ? {
+            ...current,
+            items: current.items.map((message) => {
+              if (message.sender.id !== currentUserId || !recipients.length) return message;
+              const createdAt = new Date(message.createdAt).getTime();
+              const status: Delivery = recipients.every((receipt) => receipt.lastReadAt && new Date(receipt.lastReadAt).getTime() >= createdAt)
+                ? "READ"
+                : recipients.every((receipt) => receipt.lastDeliveredAt && new Date(receipt.lastDeliveredAt).getTime() >= createdAt) ? "DELIVERED" : "SENT";
+              return { ...message, deliveryStatus: status };
+            }),
+          } : current);
+        } else if (event.messageId && event.type !== "message.deleted") {
+          const updated = await json<Message | null>(`/api/conversations/${activeId}/messages?messageId=${encodeURIComponent(event.messageId)}`);
+          if (updated) client.setQueryData<MessagePage>(["chat", "messages", activeId], (current) => current ? { ...current, items: mergeIncrementalMessages(current.items, [updated]) } : current);
+        } else {
+          await messages.refetch();
+        }
+        void conversations.refetch();
+      });
+      void presence.presence.subscribe(() => refreshPresence());
+      void presence.subscribe("typing", (message) => {
+        if (!message.clientId || message.clientId === currentUserId) return;
+        const typing = Boolean((message.data as { typing?: boolean } | undefined)?.typing);
+        clearTimeout(typingTimers.get(message.clientId));
+        setTypingUserIds((ids) => typing ? [...new Set([...ids, message.clientId!])] : ids.filter((id) => id !== message.clientId));
+        if (typing) typingTimers.set(message.clientId, setTimeout(() => setTypingUserIds((ids) => ids.filter((id) => id !== message.clientId)), 5_000));
+      });
+      void presence.presence.enter({ typing: false }).then(refreshPresence);
+      realtime.connection.on("connected", () => setRealtimeConnected(true));
+      realtime.connection.on("disconnected", () => setRealtimeConnected(false));
+      realtime.connection.on("suspended", () => setRealtimeConnected(false));
+      realtimeChannel.current = presence;
+      closeRealtime = () => { realtimeChannel.current = null; void presence.presence.leave(); realtime.close(); };
+    }).catch(() => setRealtimeConnected(false));
+    return () => {
+      cancelled = true;
+      typingTimers.forEach(clearTimeout);
+      setTypingUserIds([]);
+      setOnlineUserIds([]);
+      setRealtimeConnected(false);
+      closeRealtime?.();
+    };
+  // Query objects intentionally omitted; stable active conversation owns this connection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId, polling.visible, currentUserId, realtimeEnabled]);
+
+  const publishTyping = (typing: boolean) => {
+    const now = Date.now();
+    if (typing && now - lastTypingAt.current < 2_000) return;
+    lastTypingAt.current = now;
+    void realtimeChannel.current?.publish("typing", { typing });
+  };
+
+  const lastReadMessageId = useRef("");
+  useEffect(() => {
     if (!activeId || !messages.data) return;
+    const latestIncoming = messages.data.items.findLast((message) => message.sender.id !== currentUserId);
+    if (!latestIncoming || lastReadMessageId.current === `${activeId}:${latestIncoming.id}`) return;
+    lastReadMessageId.current = `${activeId}:${latestIncoming.id}`;
     void fetch(`/api/conversations/${activeId}/read`, { method: "PATCH" }).then(() => client.invalidateQueries({ queryKey: ["chat", "conversations"] }));
-  }, [activeId, messages.data, client]);
+  }, [activeId, messages.data, client, currentUserId]);
 
   const refreshChat = () => {
     void client.invalidateQueries({ queryKey: ["chat", "conversations"] });
@@ -227,7 +367,7 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
 
     <section className="flex min-h-[560px] min-w-0 flex-col">
       {selected ? <>
-        <header className="flex items-center gap-3 border-b p-4"><div className="min-w-0 flex-1"><h2 className="truncate font-semibold">{selected.displayName}</h2><p className="text-xs text-slate-500">{selected.type === "PROJECT" ? "Hội thoại dự án" : selected.type === "SUPPORT" ? "Kênh hỗ trợ quản trị" : "Hội thoại trực tiếp"}</p></div><button type="button" onClick={() => setShowInfo((value) => !value)} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"><Info className="size-4" />Thông tin</button></header>
+        <header className="flex items-center gap-3 border-b p-4"><div className="min-w-0 flex-1"><h2 className="truncate font-semibold">{selected.displayName}</h2><p className="text-xs text-slate-500">{typingNames.length ? `${typingNames.join(", ")} đang nhập…` : onlineUserIds.length ? `${onlineUserIds.length} người đang online` : realtimeConnected ? "Đang kết nối realtime" : selected.type === "PROJECT" ? "Hội thoại dự án" : selected.type === "SUPPORT" ? "Kênh hỗ trợ quản trị" : "Hội thoại trực tiếp"}</p></div><button type="button" onClick={() => setShowInfo((value) => !value)} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-xs"><Info className="size-4" />Thông tin</button></header>
         {selectedMessages.size ? <div className="flex flex-wrap items-center gap-2 border-b bg-blue-50 px-4 py-2 text-xs"><strong>{selectedMessages.size} tin đã chọn</strong><button onClick={() => bulk.mutate("MARK")} className="rounded border bg-white px-2 py-1">Đánh dấu</button><button onClick={() => bulk.mutate("DELETE_FOR_ME")} className="rounded border bg-white px-2 py-1">Xóa phía tôi</button><button onClick={() => setSelectedMessages(new Set())} className="ml-auto"><X className="size-4" /></button></div> : null}
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50 p-4">{messages.isLoading ? <p className="text-sm text-slate-500">Đang tải tin nhắn…</p> : messages.isError ? <ErrorRetry message={loadError(messages.error, "tin nhắn")} retry={() => void messages.refetch()} /> : allMessages.length ? allMessages.map((message) => <MessageBubble key={message.id} message={message} mine={message.sender.id === currentUserId} selected={selectedMessages.has(message.id)} toggleSelected={() => setSelectedMessages((current) => { const next = new Set(current); if (next.has(message.id)) next.delete(message.id); else next.add(message.id); return next; })} copy={() => { void navigator.clipboard.writeText(message.content); setNotice("Đã sao chép tin nhắn."); }} act={(actionName) => action.mutate({ messageId: message.id, actionName })} react={(emoji) => reaction.mutate({ messageId: message.id, emoji, remove: message.myReaction === emoji })} reacting={reaction.isPending && reaction.variables?.messageId === message.id} retry={() => retryPending(message)} />) : <p className="pt-20 text-center text-sm text-slate-500">Chưa có tin nhắn trong hội thoại này.</p>}</div>
         {notice ? <p role="status" className="border-t bg-amber-50 px-4 py-2 text-sm text-amber-800">{notice}</p> : null}
@@ -240,7 +380,7 @@ function ChatWorkspaceReady({ currentUserId, currentUserRole, initialConversatio
           {showReminder ? <div className="mb-2 grid gap-2 rounded-xl bg-blue-50 p-3 sm:grid-cols-2"><input type="datetime-local" value={reminderAt} onChange={(event) => setReminderAt(event.target.value)} className="rounded-lg border bg-white px-3 py-2 text-sm" /><p className="text-xs text-blue-700">Nhắc hẹn được lưu trong hội thoại. Tác vụ gửi thông báo đúng giờ là bước phát triển tiếp theo.</p></div> : null}
           <div className="mb-2 flex flex-wrap items-center gap-1"><ToolButton label="Emoji" onClick={() => { setShowEmoji((value) => !value); setShowGif(false); }}><Laugh /></ToolButton><button type="button" title={giphyApiKey ? "GIF" : "Chưa cấu hình GIPHY"} disabled={!giphyApiKey} onClick={() => { setShowGif((value) => !value); setShowEmoji(false); }} className="h-9 rounded-lg border px-2 text-xs font-bold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40">GIF</button><ToolButton label="Sticker" onClick={() => setShowSticker((value) => !value)}><CircleEllipsis /></ToolButton><ToolButton label="Ảnh hoặc file" onClick={() => fileInput.current?.click()}><FileUp /></ToolButton><ToolButton label="Chụp màn hình" onClick={() => void captureScreen()}><Camera /></ToolButton><ToolButton label="Nhắc hẹn" onClick={() => setShowReminder((value) => !value)}><BellRing /></ToolButton><select value={priority} onChange={(event) => setPriority(event.target.value as Priority)} className="ml-auto h-9 rounded-lg border bg-white px-2 text-xs"><option value="NORMAL">Tin thường</option><option value="IMPORTANT">Quan trọng</option><option value="URGENT">Khẩn cấp</option></select><input ref={fileInput} type="file" className="hidden" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,text/plain,.log,.ndjson,application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) upload.mutate({ file, clientId: crypto.randomUUID() }); event.currentTarget.value = ""; }} /></div>
           {!giphyApiKey ? <p className="mb-2 text-xs text-amber-700">GIF đang tắt vì chưa cấu hình `NEXT_PUBLIC_GIPHY_API_KEY`.</p> : null}
-          <form onSubmit={(event) => { event.preventDefault(); sendText(); }} className="flex gap-2"><textarea value={content} onChange={(event) => setContent(event.target.value)} maxLength={2000} rows={2} placeholder={showReminder ? "Nội dung nhắc hẹn…" : "Nhập tin nhắn…"} className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm" style={{ fontFamily: '"Twemoji Country Flags", system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }} /><button disabled={send.isPending || !content.trim() || (showReminder && !reminderAt)} aria-label="Gửi tin nhắn" className="grid w-12 place-items-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="size-4" /></button></form>
+          <form onSubmit={(event) => { event.preventDefault(); publishTyping(false); sendText(); }} className="flex gap-2"><textarea value={content} onChange={(event) => { setContent(event.target.value); publishTyping(Boolean(event.target.value.trim())); }} onBlur={() => publishTyping(false)} maxLength={2000} rows={2} placeholder={showReminder ? "Nội dung nhắc hẹn…" : "Nhập tin nhắn…"} className="min-w-0 flex-1 resize-none rounded-xl border p-3 text-sm" style={{ fontFamily: '"Twemoji Country Flags", system-ui, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif' }} /><button disabled={send.isPending || !content.trim() || (showReminder && !reminderAt)} aria-label="Gửi tin nhắn" className="grid w-12 place-items-center rounded-xl bg-blue-600 text-white disabled:opacity-50"><Send className="size-4" /></button></form>
           <p className="mt-2 text-[11px] text-slate-400">Chụp màn hình phụ thuộc quyền và bộ chọn nguồn của trình duyệt. Nếu không hỗ trợ, hãy tải ảnh lên thủ công.</p>
         </div> : <p className="border-t bg-amber-50 p-4 text-center text-sm text-amber-800">Bạn có quyền xem nhưng không thể gửi tin nhắn trong dự án này.</p>}
       </> : <div className="grid flex-1 place-items-center p-8 text-center"><div><MessagesSquare className="mx-auto size-10 text-slate-300" /><h2 className="mt-4 font-semibold">Chọn một hội thoại</h2><p className="mt-1 text-sm text-slate-500">Tin nhắn được lưu trong hệ thống và cập nhật bằng polling.</p></div></div>}
