@@ -593,6 +593,13 @@ Endpoint priorities, rate-limit baselines, Challenge guidance, and IP-block poli
 
 ### Quality checks
 
+### Project Knowledge Base
+
+- Kho nội bộ nằm tại `/projects/[projectId]/documents`; `/docs` vẫn là tài liệu công khai.
+- `VIEWER` chỉ đọc; thành viên khác có thể tạo/sửa; Admin/Manager có thể xóa mềm và khôi phục revision.
+- Markdown render bằng React nodes, không chèn HTML thô. API có RBAC server-side, same-origin guard, rate limit, validation và chống ghi đè theo `updatedAt`.
+- Chạy `npm run db:deploy` để áp dụng migration `20260819193000_project_knowledge_base`.
+
 ```bash
 npm run lint
 npm run test

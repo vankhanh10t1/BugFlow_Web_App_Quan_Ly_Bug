@@ -2079,6 +2079,16 @@
 - Đã đạt type-check, 30 test files/109 tests, ESLint không có error (còn 1 warning cũ ở notification service) và production build Next.js thành công.
 # 19/08/2026 — Hardening upload security và Admin audit log
 
+# 19/08/2026 — Project Knowledge Base
+
+- Công việc đã làm: schema/migration document-revision; CRUD/search/soft-delete/restore; UI editor, preview, viewer, filter debounce và lịch sử.
+- Bug gặp phải: nguy cơ XSS từ HTML Markdown và ghi đè khi chỉnh sửa đồng thời.
+- Cách xử lý: render React node không dùng HTML thô, chỉ link HTTP(S), giới hạn 200.000 ký tự và kiểm tra `updatedAt`.
+- File/khu vực liên quan: Prisma, `src/features/documents`, API và UI project documents, README.
+- Ghi chú: `/docs` công khai không thay đổi; chạy migration trước deploy. Prisma generate, type-check, ESLint (không có error; còn 2 warning cũ), 30 test files/111 tests và production build đều đạt.
+
+---
+
 - Công việc: thêm magic-byte validation, mapping extension–MIME, normalize filename, chặn double extension, UUID Cloudinary public ID và download policy có permission check.
 - Công việc: thêm `AdminAuditLog` bất biến, API đọc chỉ dành cho Admin, audit các mutation user và endpoint reset 2FA.
 - Công việc: thêm `sessionVersion`; khóa/deactivate/reset 2FA thu hồi JWT cũ ở request kế tiếp.

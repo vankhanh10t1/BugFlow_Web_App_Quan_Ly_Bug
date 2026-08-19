@@ -5,6 +5,7 @@ export type ErrorCode =
   | "DUPLICATE_RESOURCE"
   | "VALIDATION_ERROR"
   | "RATE_LIMITED"
+  | "CONFLICT"
   | "DATABASE_ERROR";
 
 export class AppError extends Error {

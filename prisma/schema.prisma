@@ -62,6 +62,10 @@ enum BugSeverity {
 }
 
 enum ActivityType {
+  DOCUMENT_CREATED
+  DOCUMENT_UPDATED
+  DOCUMENT_DELETED
+  DOCUMENT_REVISION_RESTORED
   BUG_CREATED
   BUG_UPDATED
   STATUS_CHANGED
@@ -182,6 +186,9 @@ model User {
   aiAuditLogs              AIAuditLog[]
   adminAuditLogsCreated    AdminAuditLog[]            @relation("AdminAuditActor")
   adminAuditLogsTargeted   AdminAuditLog[]            @relation("AdminAuditTarget")
+  projectDocumentsCreated  ProjectDocument[]          @relation("ProjectDocumentCreatedBy")
+  projectDocumentsUpdated  ProjectDocument[]          @relation("ProjectDocumentUpdatedBy")
+  documentRevisions        DocumentRevision[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -229,10 +236,49 @@ model Project {
   components       Component[]
   versions         Version[]
   savedBugViews    SavedBugView[]
+  documents        ProjectDocument[]
 
   @@index([status])
   @@index([createdById])
   @@index([createdAt])
+}
+
+model ProjectDocument {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  slug        String
+  content     String
+  type        String?
+  createdById String
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy   User     @relation("ProjectDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy   User?    @relation("ProjectDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  revisions   DocumentRevision[]
+
+  @@unique([projectId, slug])
+  @@index([projectId, deletedAt, updatedAt])
+  @@index([createdById])
+}
+
+model DocumentRevision {
+  id          String   @id @default(cuid())
+  documentId  String
+  title       String
+  content     String
+  version     Int
+  createdById String
+  createdAt   DateTime @default(now())
+  document    ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy   User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
+  @@index([createdById])
 }
 
 model ProjectMember {
