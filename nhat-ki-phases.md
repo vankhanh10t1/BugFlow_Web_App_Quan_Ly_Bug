@@ -2081,6 +2081,14 @@
 
 # 19/08/2026 — Project Knowledge Base
 
+## Sửa múi giờ hiển thị tài liệu
+
+- Công việc đã làm: chuyển thời gian cập nhật và revision sang format tại trình duyệt để dùng múi giờ thực tế của thiết bị.
+- Bug gặp phải: Server Component format ngày giờ trên server UTC nên thiết bị GMT+7 vẫn nhìn thấy giờ GMT gốc.
+- Cách xử lý: thêm `LocalDateTime`, giữ ISO timestamp trong thẻ `time` và chỉ format sau hydration bằng `Intl.DateTimeFormat` của trình duyệt.
+- File/khu vực liên quan: `src/components/documents/local-date-time.tsx` và các trang danh sách, chi tiết, lịch sử tài liệu.
+- Ghi chú: type-check, ESLint phạm vi thay đổi và `git diff --check` đều đạt.
+
 - Công việc đã làm: schema/migration document-revision; CRUD/search/soft-delete/restore; UI editor, preview, viewer, filter debounce và lịch sử.
 - Bug gặp phải: nguy cơ XSS từ HTML Markdown và ghi đè khi chỉnh sửa đồng thời.
 - Cách xử lý: render React node không dùng HTML thô, chỉ link HTTP(S), giới hạn 200.000 ký tự và kiểm tra `updatedAt`.
