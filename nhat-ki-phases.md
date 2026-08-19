@@ -810,6 +810,7 @@
 
 ## Bug gặp phải và cách xử lý
 
+- Khi test câu hỏi ngắn, Groq trả `400` vì `llama-3.1-8b-instant` đã bị ngừng hỗ trợ: đổi model mặc định sang `openai/gpt-oss-20b`, cập nhật cấu hình mẫu/local và phân biệt lỗi model decommissioned với lỗi tham số streaming.
 - Output AI có thể không parse được: dùng marker riêng và Zod strict; khi sai định dạng chỉ hiển thị text, không cho apply.
 - Cancel và timeout cùng dùng abort: phân biệt abort reason để audit đúng `cancelled` hoặc `error`.
 - Apply partial có nguy cơ ghi đè field ngoài đề xuất: schema strict và Prisma chỉ nhận object field đã validate.

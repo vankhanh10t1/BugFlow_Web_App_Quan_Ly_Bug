@@ -11,10 +11,11 @@ import { getBugAccessContext } from "@/features/bugs/service";
 const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 import { CHANGE_END, CHANGE_START } from "@/features/ai/suggestion-format";
 const positiveInt = (value: string | undefined, fallback: number) => { const parsed = Number(value); return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback; };
-function providerError(status: number) {
+function providerError(status: number, providerCode?: string) {
   if (status === 401) return new AppError("UNAUTHORIZED", "GROQ_API_KEY không hợp lệ.", 502);
   if (status === 403) return new AppError("FORBIDDEN", "GroqCloud không cho phép sử dụng model đã chọn.", 502);
-  if (status === 404 || status === 400) return new AppError("VALIDATION_ERROR", "Model hoặc yêu cầu GroqCloud không hợp lệ.", 502);
+  if (status === 404 || providerCode === "model_decommissioned" || providerCode === "model_not_found") return new AppError("VALIDATION_ERROR", "Model GroqCloud đã ngừng hỗ trợ hoặc không khả dụng. Vui lòng kiểm tra GROQ_DEFAULT_MODEL và GROQ_REASONING_MODEL.", 502);
+  if (status === 400) return new AppError("VALIDATION_ERROR", "GroqCloud từ chối tham số của yêu cầu streaming.", 502);
   if (status === 429) return new AppError("RATE_LIMITED", "GroqCloud đang giới hạn tần suất. Vui lòng thử lại sau.", 429);
   return new AppError("DATABASE_ERROR", "GroqCloud tạm thời không khả dụng.", 502);
 }
@@ -35,7 +36,10 @@ export async function prepareAiStream(actor: BugActor, input: AiChatInput, clien
   const system = aiSystemPrompt(input.task) + (input.task === "IMPROVE_BUG" && input.bugId ? `\nCuối câu trả lời, thêm đúng một khối ${CHANGE_START}{"field":"value"}${CHANGE_END}. JSON chỉ chứa field thay đổi trong: title, description, reproductionSteps, expectedResult, actualResult, priority, severity. Không đặt khối trong Markdown.` : "");
   try {
     const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, { method: "POST", headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" }, body: JSON.stringify({ model: selection.model, messages: [{ role: "system", content: system }, { role: "user", content: combined }], max_tokens: 800, temperature: input.task === "CLASSIFY_BUG" ? 0.2 : 0.4, stream: true, stream_options: { include_usage: true } }), signal: controller.signal });
-    if (!response.ok) throw providerError(response.status);
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: { code?: string } } | null;
+      throw providerError(response.status, body?.error?.code);
+    }
     return { response, auditId: audit.id, model: selection.model, startedAt, controller, timeout, onAbort };
   } catch (error) {
     clearTimeout(timeout); clientSignal.removeEventListener("abort", onAbort);

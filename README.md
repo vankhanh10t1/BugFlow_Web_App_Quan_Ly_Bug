@@ -134,7 +134,7 @@ AVATAR_MAX_SIZE_MB="5"
 CRON_SECRET="a-long-random-secret"
 
 GROQ_API_KEY=""
-GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_DEFAULT_MODEL="openai/gpt-oss-20b"
 GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
@@ -286,11 +286,11 @@ Trạng thái xác minh gần nhất: 28 test files, 94 tests đạt; Prisma val
 
 ```env
 GROQ_API_KEY="your_groq_api_key_here"
-GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_DEFAULT_MODEL="openai/gpt-oss-20b"
 GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
-`llama-3.1-8b-instant` xử lý hội thoại và tác vụ nhẹ. `openai/gpt-oss-120b` được chọn tập trung bởi `selectChatbotModel()` khi prompt dài, context lớn hoặc có yêu cầu phân tích/đánh giá/root cause/bảo mật/hướng xử lý. Khởi động lại `npm run dev` sau khi đổi env.
+`openai/gpt-oss-20b` xử lý hội thoại và tác vụ nhẹ. `openai/gpt-oss-120b` được chọn tập trung bởi `selectChatbotModel()` khi prompt dài, context lớn hoặc có yêu cầu phân tích/đánh giá/root cause/bảo mật/hướng xử lý. Khởi động lại `npm run dev` sau khi đổi env.
 
 Khi deploy Vercel: vào **Project → Settings → Environment Variables**, thêm ba biến trên cho Production/Preview cần dùng và redeploy. Không đặt `GROQ_API_KEY` dưới tên có prefix `NEXT_PUBLIC_`.
 
@@ -446,7 +446,7 @@ AVATAR_MAX_SIZE_MB="5"
 CRON_SECRET="a-long-random-secret"
 
 GROQ_API_KEY=""
-GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_DEFAULT_MODEL="openai/gpt-oss-20b"
 GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 
@@ -631,7 +631,7 @@ Latest verified state: 28 test files and 94 passing tests; Prisma validation/gen
 
 ```env
 GROQ_API_KEY="your_groq_api_key_here"
-GROQ_DEFAULT_MODEL="llama-3.1-8b-instant"
+GROQ_DEFAULT_MODEL="openai/gpt-oss-20b"
 GROQ_REASONING_MODEL="openai/gpt-oss-120b"
 ```
 

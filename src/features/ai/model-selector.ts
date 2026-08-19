@@ -1,6 +1,6 @@
 import type { AiChatInput } from "@/lib/validators/ai";
 
-const DEFAULT_MODEL_FALLBACK = "llama-3.1-8b-instant";
+const DEFAULT_MODEL_FALLBACK = "openai/gpt-oss-20b";
 const REASONING_MODEL_FALLBACK = "openai/gpt-oss-120b";
 const reasoningKeywords = [
   "phan tich", "danh gia", "tom tat du an", "de xuat huong xu ly",
