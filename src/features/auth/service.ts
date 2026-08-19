@@ -15,6 +15,7 @@ export const safeUserSelect = {
   lastLoginAt: true,
   twoFactorEnabled: true,
   twoFactorEnabledAt: true,
+  sessionVersion: true,
   createdAt: true,
   updatedAt: true,
 } as const;

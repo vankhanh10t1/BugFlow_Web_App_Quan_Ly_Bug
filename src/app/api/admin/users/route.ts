@@ -5,6 +5,7 @@ import { createAdminUserSchema, adminUserQuerySchema } from "@/lib/validators/ad
 import { createUserByAdmin, listUsers } from "@/features/users/admin-service";
 import { enforceUserMutationLimit } from "@/lib/rate-limit";
 import { assertSameOriginRequest } from "@/lib/request-security";
+import { auditRequestContext, recordAdminAudit } from "@/features/users/admin-audit-service";
 
 export async function GET(request: Request) {
   try {
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     const input = createAdminUserSchema.safeParse(await request.json());
     if (!input.success) throw new AppError("VALIDATION_ERROR", input.error.issues[0]?.message ?? "Dữ liệu người dùng không hợp lệ", 400);
     await enforceUserMutationLimit("admin:mutation", actor.id, 30);
-    return apiSuccess(await createUserByAdmin(actor, input.data), "Đã tạo tài khoản", 201);
+    const created = await createUserByAdmin(actor, input.data);
+    await recordAdminAudit({ adminUserId: actor.id, targetUserId: created.id, action: "USER_CREATED", afterValue: created, ...auditRequestContext(request) });
+    return apiSuccess(created, "Đã tạo tài khoản", 201);
   } catch (error) { return apiError(error); }
 }

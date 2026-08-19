@@ -24,6 +24,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         token.id = user.id;
         token.systemRole = user.systemRole as SystemRole;
         token.twoFactorVerified = true;
+        token.sessionVersion = user.sessionVersion ?? 0;
       }
       return token;
     },
@@ -32,6 +33,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.systemRole = token.systemRole as SystemRole;
         session.user.twoFactorVerified = token.twoFactorVerified === true;
+        session.user.sessionVersion = Number(token.sessionVersion ?? 0);
       }
       return session;
     },

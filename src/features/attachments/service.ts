@@ -16,27 +16,30 @@ async function targetContext(bugId: string | null, commentId: string | null, act
 
 export async function listBugAttachments(bugId: string, actor: BugActor) {
   await getBugAccessContext(bugId, actor);
-  return prisma.attachment.findMany({ where: { bugId }, select: { id: true, originalFileName: true, fileUrl: true, mimeType: true, fileSize: true, type: true, uploadedById: true, createdAt: true, uploadedBy: { select: { fullName: true } } }, orderBy: { createdAt: "desc" } });
+  const items = await prisma.attachment.findMany({ where: { bugId }, select: { id: true, originalFileName: true, mimeType: true, fileSize: true, type: true, uploadedById: true, createdAt: true, uploadedBy: { select: { fullName: true } } }, orderBy: { createdAt: "desc" } });
+  return items.map((item) => ({ ...item, fileUrl: `/api/attachments/${item.id}` }));
 }
+
+export async function getAttachmentDownload(id: string, actor: BugActor) { const attachment = await prisma.attachment.findUnique({ where: { id }, select: { fileUrl: true, originalFileName: true, mimeType: true, type: true, bugId: true, comment: { select: { bugId: true } } } }); if (!attachment) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy tệp đính kèm", 404); const bugId = attachment.bugId ?? attachment.comment?.bugId; if (!bugId) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy đối tượng của tệp", 404); await getBugAccessContext(bugId, actor); return attachment; }
 
 export async function createAttachment(file: File, bugId: string | null, commentId: string | null, actor: BugActor) {
   const target = await targetContext(bugId, commentId, actor);
-  const config = validateAttachment(file);
+  const config = await validateAttachment(file);
   const { maxFiles } = attachmentLimits();
   if (target.attachmentBugId) {
     const count = await prisma.attachment.count({ where: { bugId: target.attachmentBugId } });
     if (count >= maxFiles) throw new AppError("VALIDATION_ERROR", `Mỗi lỗi chỉ được có tối đa ${maxFiles} tệp đính kèm`, 400);
   }
-  const uploaded = await uploadAsset(Buffer.from(await file.arrayBuffer()), file.name, config.resource);
+  const uploaded = await uploadAsset(Buffer.from(await file.arrayBuffer()), config.fileName, config.resource);
   try {
     return await prisma.$transaction(async (tx) => {
       if (target.attachmentBugId) {
         const count = await tx.attachment.count({ where: { bugId: target.attachmentBugId } });
         if (count >= maxFiles) throw new AppError("VALIDATION_ERROR", `Mỗi lỗi chỉ được có tối đa ${maxFiles} tệp đính kèm`, 400);
       }
-      const attachment = await tx.attachment.create({ data: { originalFileName: file.name.slice(0, 255), publicId: uploaded.publicId, fileUrl: uploaded.secureUrl, mimeType: file.type || "application/octet-stream", fileSize: file.size, type: config.type, uploadedById: actor.id, bugId: target.attachmentBugId, commentId: target.commentId } });
+      const attachment = await tx.attachment.create({ data: { originalFileName: config.fileName, publicId: uploaded.publicId, fileUrl: uploaded.secureUrl, mimeType: config.mimeType, fileSize: file.size, type: config.type, uploadedById: actor.id, bugId: target.attachmentBugId, commentId: target.commentId } });
       await tx.activityLog.create({ data: { projectId: target.access.bug.projectId, bugId: target.activityBugId, actorId: actor.id, actionType: "ATTACHMENT_ADDED", description: `Attached ${file.name.slice(0, 120)}`, metadata: { attachmentId: attachment.id, commentId: target.commentId } } });
-      return attachment;
+      return { ...attachment, fileUrl: `/api/attachments/${attachment.id}` };
     });
   } catch (error) {
     await deleteAsset(uploaded.publicId, config.resource).catch(() => undefined);

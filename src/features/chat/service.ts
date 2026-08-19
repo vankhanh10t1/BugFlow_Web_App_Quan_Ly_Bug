@@ -275,13 +275,13 @@ export async function sendMessage(conversationId: string, actor: ChatActor, inpu
 
 export async function sendChatAttachment(conversationId: string, actor: ChatActor, file: File, priority: ChatMessagePriority, clientId?: string) {
   const { conversation } = await context(conversationId, actor, true);
-  const config = validateAttachment(file);
-  const uploaded = await uploadAsset(Buffer.from(await file.arrayBuffer()), file.name, config.resource);
+  const config = await validateAttachment(file);
+  const uploaded = await uploadAsset(Buffer.from(await file.arrayBuffer()), config.fileName, config.resource);
   try {
     const type: ChatMessageType = config.type === "IMAGE" || config.type === "VIDEO" ? "IMAGE" : "FILE";
     const message = await prisma.$transaction(async (tx) => {
       const created = await tx.chatMessage.create({
-        data: { conversationId, senderId: actor.id, clientId, content: file.name.slice(0, 255), type, priority, attachmentUrl: uploaded.secureUrl, attachmentPublicId: uploaded.publicId, attachmentName: file.name.slice(0, 255), attachmentMime: file.type || "application/octet-stream", attachmentSize: file.size, attachmentType: config.type },
+        data: { conversationId, senderId: actor.id, clientId, content: config.fileName, type, priority, attachmentUrl: uploaded.secureUrl, attachmentPublicId: uploaded.publicId, attachmentName: config.fileName, attachmentMime: config.mimeType, attachmentSize: file.size, attachmentType: config.type },
         select: messageSelect(actor.id),
       });
       await tx.chatConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });

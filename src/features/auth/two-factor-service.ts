@@ -9,7 +9,7 @@ import { decryptSecret, encryptSecret } from "@/lib/encryption";
 
 const RECOVERY_CODE_COUNT = 10;
 const terminalChallengeError = "Phiên xác thực không hợp lệ hoặc đã hết hạn";
-const authUserSelect = { id: true, email: true, fullName: true, avatarUrl: true, systemRole: true, accountStatus: true } as const;
+const authUserSelect = { id: true, email: true, fullName: true, avatarUrl: true, systemRole: true, accountStatus: true, sessionVersion: true } as const;
 
 function sha256(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function challengeTtlMinutes() { const value = Number(process.env.TWO_FACTOR_CHALLENGE_TTL_MINUTES ?? 10); return Number.isFinite(value) && value > 0 && value <= 30 ? value : 10; }

@@ -151,6 +151,7 @@ model User {
   twoFactorEnabled         Boolean                   @default(false)
   twoFactorSecretEncrypted String?
   twoFactorEnabledAt       DateTime?
+  sessionVersion           Int                        @default(0)
   createdAt                DateTime                  @default(now())
   updatedAt                DateTime                  @updatedAt
   projectsCreated          Project[]                 @relation("ProjectCreator")
@@ -179,9 +180,30 @@ model User {
   notificationPreferences  NotificationPreference[]
   notificationMutes        NotificationMute[]
   aiAuditLogs              AIAuditLog[]
+  adminAuditLogsCreated    AdminAuditLog[]            @relation("AdminAuditActor")
+  adminAuditLogsTargeted   AdminAuditLog[]            @relation("AdminAuditTarget")
 
   @@index([systemRole])
   @@index([accountStatus])
+  @@index([createdAt])
+}
+
+model AdminAuditLog {
+  id String @id @default(cuid())
+  adminUserId String
+  targetUserId String?
+  action String
+  beforeValue Json?
+  afterValue Json?
+  reason String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  adminUser User @relation("AdminAuditActor", fields: [adminUserId], references: [id], onDelete: Restrict)
+  targetUser User? @relation("AdminAuditTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  @@index([adminUserId])
+  @@index([targetUserId])
+  @@index([action])
   @@index([createdAt])
 }
 

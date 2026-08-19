@@ -10,7 +10,7 @@ export const getCurrentUser = cache(async () => {
   const session = await auth();
   if (!session?.user?.id || session.user.twoFactorVerified !== true) return null;
   const user = await getSafeUserById(session.user.id);
-  return user?.accountStatus === "ACTIVE" ? user : null;
+  return user?.accountStatus === "ACTIVE" && user.sessionVersion === session.user.sessionVersion ? user : null;
 });
 
 export async function requireActiveUser() {

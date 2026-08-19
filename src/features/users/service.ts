@@ -18,8 +18,8 @@ export async function updateProfile(userId: string, input: UpdateProfileInput, a
   if (avatar && !current) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy người dùng", 404);
   if (!avatar) return prisma.user.update({ where: { id: userId }, data: input, select: safeUserSelect });
 
-  validateAvatar(avatar);
-  const uploaded = await uploadAvatar(Buffer.from(await avatar.arrayBuffer()), avatar.name);
+  const validated = await validateAvatar(avatar);
+  const uploaded = await uploadAvatar(Buffer.from(await avatar.arrayBuffer()), validated.fileName);
   try {
     const updated = await prisma.user.update({ where: { id: userId }, data: { ...input, avatarUrl: uploaded.secureUrl, avatarPublicId: uploaded.publicId }, select: safeUserSelect });
     if (current?.avatarPublicId) await deleteAsset(current.avatarPublicId, "image").catch(() => undefined);

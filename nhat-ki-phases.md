@@ -2077,3 +2077,12 @@
 - Cần đặt `ABLY_API_KEY` server-only ở Vercel Production/Preview để bật Phase 2–3; không cần env public.
 - Delete-for-me là local state theo user; event không làm ẩn tin ở client khác. Polling incremental vẫn là fallback an toàn.
 - Đã đạt type-check, 30 test files/109 tests, ESLint không có error (còn 1 warning cũ ở notification service) và production build Next.js thành công.
+# 19/08/2026 — Hardening upload security và Admin audit log
+
+- Công việc: thêm magic-byte validation, mapping extension–MIME, normalize filename, chặn double extension, UUID Cloudinary public ID và download policy có permission check.
+- Công việc: thêm `AdminAuditLog` bất biến, API đọc chỉ dành cho Admin, audit các mutation user và endpoint reset 2FA.
+- Công việc: thêm `sessionVersion`; khóa/deactivate/reset 2FA thu hồi JWT cũ ở request kế tiếp.
+- Bug gặp phải: test validator cũ giả lập nội dung không có signature và gọi validator đồng bộ.
+- Cách xử lý: chuyển test sang `await` và fixture byte hợp lệ; bổ sung case spoof signature/double extension.
+- Khu vực liên quan: `src/lib/validators`, `src/lib/cloudinary.ts`, attachment/chat/user services, Admin API, auth callbacks, Prisma schema/migration.
+- Ghi chú: không thêm biến môi trường hoặc dependency mới; cần chạy migration `20260819170000_upload_security_admin_audit` khi deploy.

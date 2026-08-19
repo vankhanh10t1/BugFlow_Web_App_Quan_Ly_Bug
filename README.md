@@ -212,6 +212,12 @@ Tạo Bug → nhận bugId → upload tuần tự qua /api/uploads → mở /bug
 
 Không có file nào được gửi lên Cloudinary trước khi Bug tồn tại. Nếu một phần upload lỗi, Bug và các file đã thành công vẫn được giữ; UI nêu rõ file lỗi và cho mở trang chi tiết để tải lại.
 
+Mọi attachment, file chat và avatar được kiểm tra server-side theo bộ ba phần mở rộng–MIME–magic bytes. Tên file được chuẩn hóa, double extension nguy hiểm bị từ chối và Cloudinary public ID luôn là UUID ngẫu nhiên, không dựa trên tên gốc. Attachment của bug chỉ được đọc qua API có kiểm tra quyền dự án; nội dung không phải ảnh dùng `attachment` disposition, `nosniff` và không được inline preview.
+
+### Admin audit và thu hồi phiên
+
+Các thao tác tạo/sửa user, đổi role/status, deactivate và reset 2FA được ghi vào `AdminAuditLog`. Log chỉ chứa snapshot trường an toàn, actor/target, action, IP/User-Agent và thời điểm; không có API sửa/xóa. Admin có thể đọc có phân trang/lọc tại `GET /api/admin/audit-logs`. JWT mang `sessionVersion`; khóa, deactivate hoặc reset 2FA tăng version để phiên cũ mất hiệu lực ở request kế tiếp, đồng thời server vẫn kiểm tra `accountStatus` trong DB.
+
 Định dạng hỗ trợ: JPG/JPEG/PNG/WEBP/GIF, TXT/LOG/NDJSON, PDF, MP4 và WEBM. Server tiếp tục kiểm tra loại file, kích thước, số lượng, auth, quyền dự án, rate limit và same-origin. Nếu Cloudinary thành công nhưng ghi database thất bại, asset được cleanup.
 
 ### Bảo mật

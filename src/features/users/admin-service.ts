@@ -54,7 +54,7 @@ export async function changeAccountStatus(actor: AdminActor, userId: string, inp
   if (actor.id === userId && input.accountStatus !== "ACTIVE") throw new AppError("FORBIDDEN", "Bạn không thể tự khóa hoặc vô hiệu hóa tài khoản của mình", 403);
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!target) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy người dùng", 404);
-  return prisma.user.update({ where: { id: userId }, data: { accountStatus: input.accountStatus }, select: safeUserSelect });
+  return prisma.user.update({ where: { id: userId }, data: { accountStatus: input.accountStatus, sessionVersion: input.accountStatus === "ACTIVE" ? undefined : { increment: 1 } }, select: safeUserSelect });
 }
 
 export const lockUser = (actor: AdminActor, userId: string) => changeAccountStatus(actor, userId, { accountStatus: "LOCKED" });
@@ -67,4 +67,10 @@ export async function changeSystemRole(actor: AdminActor, userId: string, input:
   const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
   if (!target) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy người dùng", 404);
   return prisma.user.update({ where: { id: userId }, data: { systemRole: input.systemRole }, select: safeUserSelect });
+}
+
+export async function resetTwoFactor(actor: AdminActor, userId: string) {
+  assertAdmin(actor); if (actor.id === userId) throw new AppError("FORBIDDEN", "Bạn không thể tự đặt lại 2FA tại đây", 403);
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, twoFactorEnabled: true } }); if (!target) throw new AppError("RESOURCE_NOT_FOUND", "Không tìm thấy người dùng", 404);
+  return prisma.$transaction(async (tx) => { await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } }); await tx.twoFactorLoginChallenge.deleteMany({ where: { userId } }); return tx.user.update({ where: { id: userId }, data: { twoFactorEnabled: false, twoFactorEnabledAt: null, twoFactorSecretEncrypted: null, sessionVersion: { increment: 1 } }, select: safeUserSelect }); });
 }

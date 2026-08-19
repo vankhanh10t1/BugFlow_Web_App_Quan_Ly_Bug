@@ -1,5 +1,6 @@
 import { requireActiveUser } from "@/lib/auth";
 import { apiError, apiSuccess } from "@/lib/api-response";
-import { removeAttachment } from "@/features/attachments/service";
+import { getAttachmentDownload, removeAttachment } from "@/features/attachments/service";
 import { assertSameOriginRequest } from "@/lib/request-security";
 export async function DELETE(request: Request, { params }: { params: Promise<{ attachmentId: string }> }) { try { assertSameOriginRequest(request); const { attachmentId } = await params; await removeAttachment(attachmentId, await requireActiveUser()); return apiSuccess(null, "Attachment deleted"); } catch (error) { return apiError(error); } }
+export async function GET(_request: Request, { params }: { params: Promise<{ attachmentId: string }> }) { try { const attachment = await getAttachmentDownload((await params).attachmentId, await requireActiveUser()); const upstream = await fetch(attachment.fileUrl, { cache: "no-store" }); if (!upstream.ok || !upstream.body) throw new Error("Storage download failed"); const inline = attachment.type === "IMAGE"; return new Response(upstream.body, { status: 200, headers: { "Content-Type": attachment.mimeType, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(attachment.originalFileName)}`, "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'; sandbox" } }); } catch (error) { return apiError(error); } }
