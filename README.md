@@ -646,5 +646,8 @@ Create a Web SDK app/key at [GIPHY Developers](https://developers.giphy.com/), t
 - Full workflow Playwright E2E coverage has not been added yet.
 - Live production testing is still needed for Cloudinary, email/notifications, and WAF traffic baselines.
 - Ably presence and typing degrade safely when disconnected; incremental polling remains active as fallback. Screen capture depends on the browser's source picker and permission.
-- AI response streaming/cancellation and advanced AI auditing are not implemented.
+- AI trả lời theo luồng và có thể dừng bằng `AbortController`; phần nội dung đã nhận vẫn được giữ lại.
+- `IMPROVE_BUG` chỉ tạo bản xem trước theo các field được cho phép. User phải xác nhận trong modal trước khi `/api/ai/apply` kiểm tra lại quyền và cập nhật.
+- `AIAuditLog` chỉ lưu metadata vận hành (task, model, latency, token estimate, trạng thái, target, feedback và apply status), không lưu prompt, response, context, API key, session hay secret.
+- Feedback hữu ích/chưa tốt được cập nhật không reload qua `/api/ai/feedback/[auditId]` và chỉ chủ sở hữu response được thao tác.
 - Do not block countries/IPs or challenge the entire application without evidence of abuse.

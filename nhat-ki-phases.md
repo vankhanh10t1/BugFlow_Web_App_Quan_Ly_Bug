@@ -799,6 +799,32 @@
 
 ---
 
+# 19/08/2026 — Nâng cấp AI Chatbot thành workflow có kiểm soát
+
+## Công việc đã làm
+
+- Chuyển GroqCloud sang streaming, thêm nút “Dừng tạo”, giữ nội dung đã sinh và xử lý timeout/lỗi giữa luồng.
+- Thêm diff preview cho `IMPROVE_BUG`, modal xác nhận, API apply theo allowlist field và kiểm tra lại quyền ở server.
+- Thêm feedback hữu ích/chưa tốt và `AIAuditLog` cho task, model, latency, token estimate, trạng thái, target, feedback và apply status.
+- Không lưu prompt, response, context, API key, token phiên hoặc secret trong audit.
+
+## Bug gặp phải và cách xử lý
+
+- Output AI có thể không parse được: dùng marker riêng và Zod strict; khi sai định dạng chỉ hiển thị text, không cho apply.
+- Cancel và timeout cùng dùng abort: phân biệt abort reason để audit đúng `cancelled` hoặc `error`.
+- Apply partial có nguy cơ ghi đè field ngoài đề xuất: schema strict và Prisma chỉ nhận object field đã validate.
+
+## File/khu vực liên quan
+
+- `src/features/ai/service.ts`, `src/app/api/ai/*`, `src/components/ai/chatbot.tsx`, `src/lib/validators/ai.ts`.
+- `prisma/schema.prisma`, migration `20260819090000_ai_workflow_upgrade`, test AI, README và `.env.example`.
+
+## Ghi chú
+
+- Cần chạy `npm run db:deploy` trước khi phát hành. Token là estimate khi provider không trả usage.
+
+---
+
 ## 18/08/2026 — Nâng cấp Bug Management thành Workspace Triage
 
 ### Công việc đã làm

@@ -4,6 +4,7 @@ import { chatBulkActionSchema, chatMessageActionSchema, chatMessageSchema, chatR
 import { selectChatbotModel } from "@/features/ai/model-selector";
 import { cleanInlineMarkdown, parseAiAnswer } from "@/features/ai/answer-format";
 import { normalizeAiAnswer } from "@/features/ai/response-normalizer";
+import { parseSuggestion, visibleAnswer } from "@/features/ai/suggestion-format";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AiAnswer } from "@/components/ai/ai-answer";
 import { createElement } from "react";
@@ -36,6 +37,12 @@ describe("Groq model selection", () => {
 });
 
 describe("AI answer formatting", () => {
+  it("separates and validates an allowlisted bug suggestion", () => {
+    const raw = 'Nội dung xem trước\n<BUGFLOW_CHANGES>{"title":"Tiêu đề lỗi hợp lệ","priority":"HIGH"}</BUGFLOW_CHANGES>';
+    expect(visibleAnswer(raw)).toBe("Nội dung xem trước");
+    expect(parseSuggestion(raw)).toEqual({ title: "Tiêu đề lỗi hợp lệ", priority: "HIGH" });
+    expect(parseSuggestion('<BUGFLOW_CHANGES>{"status":"CLOSED"}</BUGFLOW_CHANGES>')).toBeNull();
+  });
   it("parses headings and lists without exposing list markers", () => {
     expect(parseAiAnswer("## Hướng dẫn\n1. **Đăng nhập**\n2. Tạo bug\n\n* **Tiêu đề lỗi**")).toEqual([
       { type: "heading", text: "Hướng dẫn" },

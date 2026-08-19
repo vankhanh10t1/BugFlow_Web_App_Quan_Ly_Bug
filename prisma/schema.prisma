@@ -178,6 +178,7 @@ model User {
   savedBugViews            SavedBugView[]
   notificationPreferences  NotificationPreference[]
   notificationMutes        NotificationMute[]
+  aiAuditLogs              AIAuditLog[]
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -266,6 +267,7 @@ model Bug {
   versionId          String?
   component          Component?      @relation(fields: [componentId], references: [id], onDelete: SetNull)
   version            Version?        @relation(fields: [versionId], references: [id], onDelete: SetNull)
+  aiAuditLogs        AIAuditLog[]
 
   @@unique([projectId, sequenceNumber])
   @@index([projectId, status])
@@ -278,6 +280,28 @@ model Bug {
   @@index([deletedAt])
   @@index([componentId])
   @@index([versionId])
+}
+
+model AIAuditLog {
+  id            String   @id @default(cuid())
+  userId        String
+  task          String
+  model         String
+  latencyMs     Int?
+  tokenEstimate Int?
+  status        String
+  targetType    String?
+  targetId      String?
+  feedback      String?
+  applyStatus   String?  @default("not_applied")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bug            Bug?     @relation(fields: [targetId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([task])
+  @@index([targetType, targetId])
 }
 
 model BugLabel {
