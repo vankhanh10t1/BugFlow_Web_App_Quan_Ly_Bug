@@ -49,6 +49,10 @@ export const bugQuerySchema = z.object({
 export const assignBugSchema = z.object({ assigneeId: z.union([z.string().min(1), z.null(), z.literal("")]).transform((value) => value || null) });
 export const prioritySchema = z.object({ priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]) });
 export const severitySchema = z.object({ severity: z.enum(["MINOR", "MAJOR", "CRITICAL", "BLOCKER"]) });
+export const bugLinkSchema = z.object({
+  targetBugId: z.string().trim().min(1).max(100),
+  type: z.enum(["DUPLICATE", "BLOCKED_BY", "RELATES_TO"]),
+});
 export const quickEditBugSchema = z.object({
   assigneeId: z.union([z.string().min(1), z.null()]).optional(),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),

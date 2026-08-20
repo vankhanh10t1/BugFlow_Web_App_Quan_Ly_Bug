@@ -2104,3 +2104,27 @@
 - Cách xử lý: chuyển test sang `await` và fixture byte hợp lệ; bổ sung case spoof signature/double extension.
 - Khu vực liên quan: `src/lib/validators`, `src/lib/cloudinary.ts`, attachment/chat/user services, Admin API, auth callbacks, Prisma schema/migration.
 - Ghi chú: không thêm biến môi trường hoặc dependency mới; cần chạy migration `20260819170000_upload_security_admin_audit` khi deploy.
+# 20/08/2026 — Bug Links
+
+## Công việc đã làm
+
+- Thêm schema/migration, API list/create/delete, tìm kiếm bug đích và UI quan hệ hai chiều cho `DUPLICATE`, `BLOCKED_BY`, `RELATES_TO`.
+- Kiểm tra auth, quyền xem cả hai bug, quyền sửa bug nguồn, same-origin, rate limit, self-link, liên kết đảo chiều trùng logic và vòng phụ thuộc `BLOCKED_BY`.
+- Ghi activity `BUG_LINK_CREATED` và `BUG_LINK_DELETED` với đầy đủ metadata nguồn, đích và loại quan hệ.
+
+## Bug gặp phải và cách xử lý
+
+- Quan hệ blocker nhiều tầng có thể tạo vòng dù không có cặp đảo trực tiếp; service dựng đồ thị các cạnh `BLOCKED_BY` và duyệt từ bug đích trước khi ghi.
+- Link được xem từ bug đích nhưng quyền xóa vẫn phải theo bug nguồn; response tính `canDelete` riêng cho từng liên kết ở server.
+
+## File/khu vực liên quan
+
+- `prisma/schema.prisma`, migration `20260820120000_bug_links`.
+- `src/features/bugs/link-service.ts`, API bug links, validator và `src/components/bugs/bug-links.tsx`.
+- Trang chi tiết bug và README.
+
+## Ghi chú
+
+- Cho phép liên kết khác project nếu người dùng có quyền xem cả hai project; quyền chỉnh sửa luôn được kiểm tra trên bug nguồn.
+
+---

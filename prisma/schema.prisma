@@ -86,8 +86,16 @@ enum ActivityType {
   TWO_FACTOR_RESET_BY_ADMIN
   LOGIN_SUCCEEDED
   LOGIN_FAILED
+  BUG_LINK_CREATED
+  BUG_LINK_DELETED
   TWO_FACTOR_VERIFICATION_FAILED
   TWO_FACTOR_RECOVERY_CODE_USED
+}
+
+enum BugLinkType {
+  DUPLICATE
+  BLOCKED_BY
+  RELATES_TO
 }
 
 enum NotificationType {
@@ -189,6 +197,7 @@ model User {
   projectDocumentsCreated  ProjectDocument[]          @relation("ProjectDocumentCreatedBy")
   projectDocumentsUpdated  ProjectDocument[]          @relation("ProjectDocumentUpdatedBy")
   documentRevisions        DocumentRevision[]
+  bugLinksCreated          BugLink[]                 @relation("BugLinkCreator")
 
   @@index([systemRole])
   @@index([accountStatus])
@@ -336,6 +345,8 @@ model Bug {
   component          Component?      @relation(fields: [componentId], references: [id], onDelete: SetNull)
   version            Version?        @relation(fields: [versionId], references: [id], onDelete: SetNull)
   aiAuditLogs        AIAuditLog[]
+  outgoingLinks      BugLink[]       @relation("BugLinkSource")
+  incomingLinks      BugLink[]       @relation("BugLinkTarget")
 
   @@unique([projectId, sequenceNumber])
   @@index([projectId, status])
@@ -348,6 +359,23 @@ model Bug {
   @@index([deletedAt])
   @@index([componentId])
   @@index([versionId])
+}
+
+model BugLink {
+  id          String      @id @default(cuid())
+  sourceBugId String
+  targetBugId String
+  type        BugLinkType
+  createdById String
+  createdAt   DateTime    @default(now())
+  sourceBug   Bug         @relation("BugLinkSource", fields: [sourceBugId], references: [id], onDelete: Cascade)
+  targetBug   Bug         @relation("BugLinkTarget", fields: [targetBugId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation("BugLinkCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([sourceBugId, targetBugId, type])
+  @@index([sourceBugId])
+  @@index([targetBugId])
+  @@index([type])
 }
 
 model AIAuditLog {

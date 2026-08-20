@@ -611,6 +611,8 @@ Latest verified state: 28 test files and 94 passing tests; Prisma validation/gen
 
 ### Workspace triage cho Bug Management
 
+- Bug detail hỗ trợ liên kết `DUPLICATE`, `BLOCKED_BY`, `RELATES_TO` qua `/api/bugs/[bugId]/links`; quan hệ hiển thị hai chiều, kiểm tra quyền trên cả hai project và phát hiện vòng phụ thuộc blocker. Chạy `npm run db:deploy` để áp dụng migration `20260820120000_bug_links`.
+
 - `/bugs` và `/my-bugs` hỗ trợ deadline (hôm nay, 7 ngày tới, quá hạn, không deadline), chưa phân công, nhãn, thành phần, phiên bản và giữ filter/sort trên URL.
 - Mỗi user có saved views riêng qua `/api/bug-views`; hỗ trợ tạo, đổi tên, xóa và đặt mặc định. Filter được lưu dạng JSON đã validate.
 - Bảng lỗi hỗ trợ chọn nhiều dòng, bulk assign/priority/status, modal xác nhận và báo lỗi riêng cho từng bug thất bại.
